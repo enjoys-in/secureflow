@@ -2,7 +2,7 @@ version: "3.9"
 name: firewall_manager
 services:
   postgres:
-    image: postgres:16
+    image: postgres:15
     container_name: fm_postgres
     environment:
       POSTGRES_USER: fm_user
