@@ -4,11 +4,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { logActivity } from "@/types"
 import {
-  Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "@/components/ui/table"
 import {
@@ -207,8 +204,8 @@ export default function AuditLogsPage() {
   })
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="flex flex-col h-full p-6 gap-6">
+      {/* Header — static */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Audit Logs</h1>
@@ -228,8 +225,8 @@ export default function AuditLogsPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
+      {/* Filters — static */}
+      <Card className="shrink-0">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -263,20 +260,21 @@ export default function AuditLogsPage() {
         </CardContent>
       </Card>
 
-      {/* Logs Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Resource</TableHead>
-                <TableHead>Details</TableHead>
-                <TableHead>IP Address</TableHead>
-              </TableRow>
-            </TableHeader>
+      {/* Logs Table — scrollable */}
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <CardContent className="p-0 flex-1 overflow-hidden">
+          <div className="h-full overflow-auto relative">
+          <table className="w-full caption-bottom text-sm">
+            <thead className="sticky top-0 bg-card z-10 [&_tr]:border-b">
+              <tr className="border-b">
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Timestamp</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">User</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Action</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Resource</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">Details</th>
+                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">IP Address</th>
+              </tr>
+            </thead>
             <TableBody>
               {filteredLogs.map((log) => (
                 <TableRow key={log.id}>
@@ -327,12 +325,13 @@ export default function AuditLogsPage() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
+      {/* Pagination — static */}
+      <div className="flex items-center justify-between shrink-0">
         <p className="text-sm text-muted-foreground">
           Page 1 of 1 · {filteredLogs.length} total entries
         </p>
