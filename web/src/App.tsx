@@ -13,6 +13,7 @@ import AuditLogsPage from "@/pages/audit-logs"
 import LiveLogsPage from "@/pages/live-logs"
 import BlockedIpsPage from "@/pages/blocked-ips"
 import SettingsPage from "@/pages/settings"
+import { WebSocketProvider } from "./contexts/websocket-context"
 
 function App() {
   return (
@@ -38,7 +39,9 @@ function App() {
             <Route path="/blocked-ips" element={<BlockedIpsPage />} />
             <Route path="/members" element={<MembersPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />
-            <Route path="/live-logs" element={<LiveLogsPage />} />
+            <Route path="/live-logs" element={<WebSocketProvider>
+              <LiveLogsPage />
+            </WebSocketProvider>} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

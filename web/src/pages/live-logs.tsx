@@ -26,7 +26,10 @@ import {
   Filter,
   Wifi,
   WifiOff,
+  RefreshCw,
 } from "lucide-react"
+import { useWebSocket, type WSEvent } from "@/contexts/websocket-context"
+
 
 interface LogEntry {
   id: number
@@ -41,72 +44,60 @@ interface LogEntry {
   bytes: number
 }
 
-const protocols = ["TCP", "UDP", "ICMP"]
-const actions: ("ACCEPT" | "DROP" | "REJECT")[] = ["ACCEPT", "DROP", "REJECT"]
-const sampleIps = [
-  "192.168.1.5",
-  "10.0.0.15",
-  "172.16.0.50",
-  "185.143.223.45",
-  "203.0.113.10",
-  "8.8.8.8",
-  "1.1.1.1",
-  "93.184.216.34",
-  "198.51.100.22",
-  "45.33.32.156",
-]
-const samplePorts = [22, 25, 80, 443, 465, 587, 3306, 6379, 8080, 8443, 9090, 53]
-const ruleIds = [
-  "rule-001",
-  "rule-002",
-  "rule-003",
-  "rule-004",
-  "rule-005",
-  "rule-006",
-  "rule-010",
-  "rule-011",
-  "default",
-]
+const MAX_LOGS = 500
 
-function generateLog(id: number): LogEntry {
-  const now = new Date()
+function wsEventToLog(event: WSEvent, id: number): LogEntry | null {
+  if (!event.action) return null
   return {
     id,
-    timestamp: now.toISOString().replace("T", " ").substring(0, 19),
-    srcIp: sampleIps[Math.floor(Math.random() * sampleIps.length)],
-    dstIp: sampleIps[Math.floor(Math.random() * sampleIps.length)],
-    protocol: protocols[Math.floor(Math.random() * protocols.length)],
-    port: samplePorts[Math.floor(Math.random() * samplePorts.length)],
-    action: actions[Math.floor(Math.random() * 10) < 7 ? 0 : Math.floor(Math.random() * 2) + 1],
-    direction: Math.random() > 0.3 ? "IN" : "OUT",
-    ruleId: ruleIds[Math.floor(Math.random() * ruleIds.length)],
-    bytes: Math.floor(Math.random() * 65536),
+    timestamp: (event.timestamp || new Date().toISOString()).replace("T", " ").substring(0, 19),
+    srcIp: event.src_ip || "—",
+    dstIp: event.dst_ip || "—",
+    protocol: (event.protocol || "TCP").toUpperCase(),
+    port: event.port || 0,
+    action: (event.action as "ACCEPT" | "DROP" | "REJECT") || "ACCEPT",
+    direction: event.type === "traffic" ? "IN" : "IN",
+    ruleId: event.rule_id || "—",
+    bytes: 0,
   }
 }
 
 export default function LiveLogsPage() {
-  const [logs, setLogs] = useState<LogEntry[]>(() =>
-    Array.from({ length: 20 }, (_, i) => generateLog(i + 1))
-  )
+  const { status, retryCount, subscribe, reconnect } = useWebSocket()
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [isStreaming, setIsStreaming] = useState(true)
   const [autoScroll, setAutoScroll] = useState(true)
   const [filterAction, setFilterAction] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
-  const counterRef = useRef(21)
+  const counterRef = useRef(1)
+  const isStreamingRef = useRef(true)
+
+  // Keep ref in sync so the subscribe callback always reads latest value
+  useEffect(() => {
+    isStreamingRef.current = isStreaming
+  }, [isStreaming])
 
   useEffect(() => {
     logActivity({ timestamp: new Date().toISOString(), page: "LiveLogs", action: "PAGE_VIEW" })
   }, [])
 
+  // Subscribe to WebSocket events
   useEffect(() => {
-    if (!isStreaming) return
-    const interval = setInterval(() => {
-      const newLog = generateLog(counterRef.current++)
-      setLogs((prev) => [...prev.slice(-200), newLog])
-    }, 800)
-    return () => clearInterval(interval)
-  }, [isStreaming])
+    const unsubscribe = subscribe((event: WSEvent) => {
+      if (!isStreamingRef.current) return // paused — ignore incoming events
+
+      const log = wsEventToLog(event, counterRef.current++)
+      if (!log) return
+
+      setLogs((prev) => {
+        const next = [...prev, log]
+        return next.length > MAX_LOGS ? next.slice(-MAX_LOGS) : next
+      })
+    })
+
+    return unsubscribe
+  }, [subscribe])
 
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
@@ -140,21 +131,41 @@ export default function LiveLogsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {status === "disconnected" && (
+            <Button variant="outline" size="sm" onClick={reconnect}>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              Reconnect{retryCount > 0 && ` (${retryCount})`}
+            </Button>
+          )}
           <Badge
             variant="outline"
             className={
-              isStreaming
-                ? "border-green-500 text-green-600"
-                : "border-red-500 text-red-500"
+              status === "connected"
+                ? isStreaming
+                  ? "border-green-500 text-green-600"
+                  : "border-amber-500 text-amber-600"
+                : status === "connecting"
+                  ? "border-blue-500 text-blue-500"
+                  : "border-red-500 text-red-500"
             }
           >
-            {isStreaming ? (
+            {status === "connected" ? (
+              isStreaming ? (
+                <>
+                  <Wifi className="mr-1 h-3 w-3" /> Live
+                </>
+              ) : (
+                <>
+                  <Pause className="mr-1 h-3 w-3" /> Paused
+                </>
+              )
+            ) : status === "connecting" ? (
               <>
-                <Wifi className="mr-1 h-3 w-3" /> Live
+                <RefreshCw className="mr-1 h-3 w-3 animate-spin" /> Connecting
               </>
             ) : (
               <>
-                <WifiOff className="mr-1 h-3 w-3" /> Paused
+                <WifiOff className="mr-1 h-3 w-3" /> Disconnected
               </>
             )}
           </Badge>

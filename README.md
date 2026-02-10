@@ -109,6 +109,7 @@ These ports are **always open** and cannot be blocked by any user, including adm
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | 8443 | API server port |
+| `ALLOW_ORIGINGS` | "*"| Pass the Domain you want to Allow in CORS |
 | `POSTGRES_DSN` | localhost | PostgreSQL connection string |
 | `OPENFGA_ENDPOINT` | http://localhost:8080 | OpenFGA API endpoint |
 | `OPENFGA_STORE_ID` | | OpenFGA store ID |

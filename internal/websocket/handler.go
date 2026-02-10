@@ -11,18 +11,22 @@ import (
 )
 
 // UpgradeMiddleware checks that the request is a WebSocket upgrade and
-// validates the JWT token from a query parameter (since WS clients can't set headers).
+// validates the JWT token from a query parameter or cookie.
 func UpgradeMiddleware(auth *security.AuthService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if !websocket.IsWebSocketUpgrade(c) {
 			return fiber.ErrUpgradeRequired
 		}
 
-		// WebSocket clients pass token as query param
+		// Try query param first, then fall back to cookie
 		token := c.Query("token")
 		if token == "" {
+			token = c.Cookies("secureflow_token")
+		}
+
+		if token == "" {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "token query parameter is required for WebSocket connections",
+				"error": "authentication required for WebSocket connections",
 			})
 		}
 
