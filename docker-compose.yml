@@ -1,7 +1,16 @@
 version: "3.9"
 name: firewall_manager
 services:
-
+  web:
+    build: ./web
+    container_name: fm_web
+    ports:
+      - "4173:4173"
+      - "5173:5173"
+    depends_on:
+      - firewall-api
+    environment:
+      - VITE_API_URL=http://firewall-api:8443/api/v1
   postgres:
     image: postgres:15
     container_name: fm_postgres
