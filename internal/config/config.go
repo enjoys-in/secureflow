@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds all application configuration.
@@ -39,6 +41,9 @@ var DefaultImmutablePorts = []int{22, 25, 465, 587, 3306, 6379}
 
 // Load reads configuration from environment variables with sensible defaults.
 func Load() (*Config, error) {
+	// Load .env file if it exists (won't override existing env vars)
+	_ = godotenv.Load()
+
 	cfg := &Config{
 		Port:            getEnvInt("PORT", 8443),
 		TLSEnabled:      getEnvBool("TLS_ENABLED", false),
