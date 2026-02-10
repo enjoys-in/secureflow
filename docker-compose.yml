@@ -1,0 +1,62 @@
+version: "3.9"
+name: firewall_manager
+services:
+  postgres:
+    image: postgres:15
+    container_name: fm_postgres
+    environment:
+      POSTGRES_USER: fm_user
+      POSTGRES_PASSWORD: fm_password
+      POSTGRES_DB: firewall_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fm_user -d firewall_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  openfga:
+    image: openfga/openfga:latest
+    container_name: fm_openfga
+    command: run
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://fm_user:fm_password@postgres:5432/firewall_manager?sslmode=disable
+      - OPENFGA_LOG_LEVEL=info
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  firewall-api:
+    build: .
+    container_name: fm_api
+    environment:
+      PORT: "8443"
+      POSTGRES_DSN: "postgres://fm_user:fm_password@postgres:5432/firewall_manager?sslmode=disable"
+      OPENFGA_ENDPOINT: "http://openfga:8080"
+      JWT_SECRET: "your-production-secret-change-this"
+      FIREWALL_BACKEND: "iptables"
+      LOG_LEVEL: "info"
+      LOG_FORMAT: "json"
+      TLS_ENABLED: "false"
+      IMMUTABLE_PORTS: "22,25,465,587,3306,6379"
+    ports:
+      - "8443:8443"
+    cap_add:
+      - NET_ADMIN
+    depends_on:
+      postgres:
+        condition: service_healthy
+      openfga:
+        condition: service_started
+    volumes:
+      - /lib/modules:/lib/modules:ro
+
+volumes:
+  pgdata:
