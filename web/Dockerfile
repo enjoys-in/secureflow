@@ -5,10 +5,10 @@ FROM oven/bun:1-alpine AS build
 
 WORKDIR /app
 
-COPY ./web/package.json ./web/bun.lockb* ./
+COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile
 
-COPY ./web ./
+COPY . .
 RUN bun run build
 
 # -----------------
