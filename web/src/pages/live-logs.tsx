@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { logActivity } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -95,6 +96,10 @@ export default function LiveLogsPage() {
   const counterRef = useRef(21)
 
   useEffect(() => {
+    logActivity({ timestamp: new Date().toISOString(), page: "LiveLogs", action: "PAGE_VIEW" })
+  }, [])
+
+  useEffect(() => {
     if (!isStreaming) return
     const interval = setInterval(() => {
       const newLog = generateLog(counterRef.current++)
@@ -129,8 +134,8 @@ export default function LiveLogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Real-Time Logs</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight">Real-Time Logs</h1>
+          <p className="text-[13px] text-muted-foreground">
             Live firewall traffic stream — monitor packets in real-time
           </p>
         </div>

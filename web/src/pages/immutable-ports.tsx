@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Lock, ShieldAlert, Info, Server } from "lucide-react"
+import { logActivity } from "@/types"
 
 interface ProtectedPort {
   port: number
@@ -84,12 +86,16 @@ const categoryLabels = {
 }
 
 export default function ImmutablePortsPage() {
+  useEffect(() => {
+    logActivity({ timestamp: new Date().toISOString(), page: "ProtectedPorts", action: "PAGE_VIEW" })
+  }, [])
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Protected Ports</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-xl font-semibold tracking-tight">Protected Ports</h1>
+        <p className="text-[13px] text-muted-foreground">
           System-level immutable ports that cannot be modified or closed by any user
         </p>
       </div>

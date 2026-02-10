@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import AppLayout from "@/layouts/app-layout"
 import LoginPage from "@/pages/auth/login"
-import RegisterPage from "@/pages/auth/register"
 import ForgotPasswordPage from "@/pages/auth/forgot-password"
 import DashboardPage from "@/pages/dashboard"
 import SecurityGroupsPage from "@/pages/security-groups"
@@ -18,7 +17,6 @@ function App() {
       <Routes>
         {/* Auth routes */}
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         {/* App routes with sidebar layout */}

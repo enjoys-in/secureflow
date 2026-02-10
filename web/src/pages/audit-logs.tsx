@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { logActivity } from "@/types"
 import {
   Table,
   TableBody,
@@ -191,6 +192,10 @@ export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [actionFilter, setActionFilter] = useState("all")
 
+  useEffect(() => {
+    logActivity({ timestamp: new Date().toISOString(), page: "AuditLogs", action: "PAGE_VIEW" })
+  }, [])
+
   const filteredLogs = mockLogs.filter((log) => {
     const matchesSearch =
       log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -206,8 +211,8 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl font-semibold tracking-tight">Audit Logs</h1>
+          <p className="text-[13px] text-muted-foreground">
             Track all user actions, rule changes, and system events
           </p>
         </div>
