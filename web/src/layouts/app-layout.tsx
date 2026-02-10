@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Menu,
   ShieldCheck,
+  ShieldBan,
   Bell,
   Search,
 } from "lucide-react"
@@ -31,6 +32,7 @@ import {
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import { logActivity } from "@/types"
+import { useAuth } from "@/contexts/auth-context"
 
 interface NavSection {
   title: string
@@ -45,6 +47,7 @@ const navSections: NavSection[] = [
       { to: "/security-groups", label: "Security Groups", icon: ShieldCheck },
       { to: "/firewall-rules", label: "Firewall Rules", icon: Network },
       { to: "/immutable-ports", label: "Protected Ports", icon: Lock },
+      { to: "/blocked-ips", label: "Blocked IPs", icon: ShieldBan },
     ],
   },
   {
@@ -72,9 +75,16 @@ export default function AppLayout() {
   })
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   const handleNavClick = (label: string) => {
     logActivity({ timestamp: new Date().toISOString(), page: "Navigation", action: "NAV_CLICK", data: { target: label } })
+  }
+
+  const handleLogout = () => {
+    logActivity({ timestamp: new Date().toISOString(), page: "AppLayout", action: "SIGN_OUT" })
+    logout()
+    navigate("/login")
   }
 
   const toggleSection = (section: string) => {
@@ -207,24 +217,28 @@ export default function AppLayout() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="flex items-center gap-2 px-2 h-8">
                     <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-[10px] bg-[#ff9900] text-white font-semibold">AD</AvatarFallback>
+                      <AvatarFallback className="text-[10px] bg-[#ff9900] text-white font-semibold">
+                        {user?.name
+                          ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase()
+                          : "?"}
+                      </AvatarFallback>
                     </Avatar>
-                    {/* Show name on wider screens */}
-                    <span className="text-[13px] font-medium text-foreground hidden sm:block">Admin</span>
+                    <span className="text-[13px] font-medium text-foreground hidden sm:block">
+                      {user?.name || "User"}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel className="text-xs">My Account</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-xs">
+                    {user?.email || "My Account"}
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate("/settings")} className="text-[13px]">
                     <Settings className="mr-2 h-4 w-4" />
                     Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => {
-                    logActivity({ timestamp: new Date().toISOString(), page: "AppLayout", action: "SIGN_OUT" })
-                    navigate("/login")
-                  }} className="text-[13px]">
+                  <DropdownMenuItem onClick={handleLogout} className="text-[13px]">
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign out
                   </DropdownMenuItem>

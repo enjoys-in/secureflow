@@ -1,17 +1,26 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useForm } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Shield, Eye, EyeOff } from "lucide-react"
+import { Shield, Eye, EyeOff, AlertCircle } from "lucide-react"
 import type { LoginPayload } from "@/types"
-import { logActivity } from "@/types"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const location = useLocation()
+  const { login, isAuthenticated } = useAuth()
+
+  // If already authenticated, redirect
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard"
+  if (isAuthenticated) {
+    navigate(from, { replace: true })
+  }
 
   const {
     register,
@@ -20,10 +29,16 @@ export default function LoginPage() {
   } = useForm<LoginPayload>({ defaultValues: { email: "", password: "" } })
 
   const onSubmit = async (data: LoginPayload) => {
-    logActivity({ timestamp: new Date().toISOString(), page: "Login", action: "SIGN_IN_ATTEMPT", data })
-    await new Promise((r) => setTimeout(r, 1200))
-    logActivity({ timestamp: new Date().toISOString(), page: "Login", action: "SIGN_IN_SUCCESS", data: { email: data.email } })
-    navigate("/dashboard")
+    setLoginError(null)
+    try {
+      await login(data.email, data.password)
+      navigate(from, { replace: true })
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { message?: string } } }
+      setLoginError(
+        axiosErr.response?.data?.message || "Invalid credentials. Please try again."
+      )
+    }
   }
 
   return (
@@ -44,6 +59,12 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {loginError && (
+                <div className="flex items-center gap-2 rounded border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-500">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {loginError}
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" type="email" placeholder="you@example.com" {...register("email", { required: "Email is required" })} />
