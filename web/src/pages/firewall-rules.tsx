@@ -57,17 +57,17 @@ export default function FirewallRulesPage() {
   })
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div>
+    <div className="flex flex-col h-full p-6 gap-6">
+      {/* Header — static */}
+      <div className="shrink-0">
         <h1 className="text-xl font-semibold tracking-tight">Firewall Rules</h1>
         <p className="text-[13px] text-muted-foreground">
           View inbound and outbound firewall rules across all security groups
         </p>
       </div>
 
-      {/* Filters */}
-      <Card>
+      {/* Filters — static */}
+      <Card className="shrink-0">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -116,11 +116,11 @@ export default function FirewallRulesPage() {
         </CardContent>
       </Card>
 
-      {/* Rules Table — Read Only */}
-      <Card>
-        <CardContent className="p-0">
+      {/* Rules Table — scrollable content, sticky table header */}
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <CardContent className="p-0 flex-1 overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
                 <TableHead className="w-[40px]" />
                 <TableHead>Name</TableHead>
