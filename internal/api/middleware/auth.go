@@ -19,16 +19,26 @@ func NewAuthMiddleware(auth *security.AuthService) *AuthMiddleware {
 	return &AuthMiddleware{auth: auth}
 }
 
-// Authenticate validates the JWT token from the Authorization header.
+// Authenticate validates the JWT token from the Authorization header or auth_token cookie.
 func (m *AuthMiddleware) Authenticate(c *fiber.Ctx) error {
+	var token string
+
+	// Try Authorization header first
 	authHeader := c.Get("Authorization")
-	if authHeader == "" {
-		return constants.ErrMissingAuthHeader
+	if authHeader != "" {
+		token = strings.TrimPrefix(authHeader, "Bearer ")
+		if token == authHeader {
+			return constants.ErrInvalidAuthFormat
+		}
 	}
 
-	token := strings.TrimPrefix(authHeader, "Bearer ")
-	if token == authHeader {
-		return constants.ErrInvalidAuthFormat
+	// Fall back to cookie
+	if token == "" {
+		token = c.Cookies("secureflow_token")
+	}
+
+	if token == "" {
+		return constants.ErrMissingAuthHeader
 	}
 
 	claims, err := m.auth.ValidateToken(token)

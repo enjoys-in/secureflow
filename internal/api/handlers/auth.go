@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/enjoys-in/secureflow/internal/constants"
@@ -8,6 +10,8 @@ import (
 	"github.com/enjoys-in/secureflow/internal/repository"
 	"github.com/enjoys-in/secureflow/internal/security"
 )
+
+const COOKIE_NAME = "secureflow_token"
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
@@ -55,6 +59,8 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		return constants.ErrUserAlreadyExists.Wrap(err)
 	}
 
+	setAuthCookie(c, token)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "user registered",
 		"user":    user,
@@ -80,6 +86,8 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		Resource: "auth",
 		IP:       c.IP(),
 	})
+
+	setAuthCookie(c, token)
 
 	return c.JSON(fiber.Map{
 		"message": "login successful",
@@ -116,10 +124,25 @@ func (h *AuthHandler) AcceptInvite(c *fiber.Ctx) error {
 
 	_ = h.invRepo.Accept(c.Context(), inv.ID)
 
+	setAuthCookie(c, jwtToken)
+
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "invitation accepted, user registered",
 		"user":    user,
 		"token":   jwtToken,
 		"role":    inv.Role,
+	})
+}
+
+// setAuthCookie sets the JWT token as an HTTP-only cookie.
+func setAuthCookie(c *fiber.Ctx, token string) {
+	c.Cookie(&fiber.Cookie{
+		Name:     COOKIE_NAME,
+		Value:    token,
+		Path:     "/",
+		HTTPOnly: true,
+		Secure:   false, // set to true in production with HTTPS
+		SameSite: "Lax",
+		Expires:  time.Now().Add(24 * time.Hour),
 	})
 }

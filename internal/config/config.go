@@ -16,7 +16,8 @@ type Config struct {
 	TLSEnabled  bool   `yaml:"tls_enabled"`
 	TLSCertFile string `yaml:"tls_cert_file"`
 	TLSKeyFile  string `yaml:"tls_key_file"`
-
+	// Origins
+	AllowOrigins string `yaml:"allow_origins"`
 	// Database
 	PostgresDSN string `yaml:"postgres_dsn"`
 
@@ -49,6 +50,7 @@ func Load() (*Config, error) {
 		TLSEnabled:      getEnvBool("TLS_ENABLED", false),
 		TLSCertFile:     getEnv("TLS_CERT_FILE", "certs/server.crt"),
 		TLSKeyFile:      getEnv("TLS_KEY_FILE", "certs/server.key"),
+		AllowOrigins:    getEnv("ALLOW_ORIGINS", "*"),
 		PostgresDSN:     getEnv("POSTGRES_DSN", "postgres://fm_user:fm_password@localhost:5432/firewall_manager?sslmode=disable"),
 		OpenFGAEndpoint: getEnv("OPENFGA_ENDPOINT", "http://localhost:8080"),
 		OpenFGAStoreID:  getEnv("OPENFGA_STORE_ID", ""),
