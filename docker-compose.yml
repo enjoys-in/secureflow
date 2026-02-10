@@ -46,7 +46,7 @@ services:
       LOG_FORMAT: "json"
       TLS_ENABLED: "false"
       IMMUTABLE_PORTS: "22,25,465,587,3306,6379"
-      ALLOW_ORIGINS: http://localhost:5173
+      ALLOW_ORIGINS: http://localhost:5173,https://firewall.enjoys.in
     ports:
       - "8443:8443"
     cap_add:

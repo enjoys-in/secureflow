@@ -21,6 +21,7 @@ WORKDIR /app
 
 COPY --from=builder /firewall-manager .
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/web/dist ./web
 
 EXPOSE 8443
 

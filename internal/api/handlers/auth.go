@@ -141,8 +141,8 @@ func setAuthCookie(c *fiber.Ctx, token string) {
 		Value:    token,
 		Path:     "/",
 		HTTPOnly: true,
-		Secure:   false, // set to true in production with HTTPS
-		SameSite: "Lax",
+		Secure:   false,  // set to true in production with HTTPS
+		SameSite: "None", // adjust as needed (e.g. "Lax" or "Strict")
 		Expires:  time.Now().Add(24 * time.Hour),
 	})
 }

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -118,6 +119,20 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// WebSocket (authenticated via query param token)
 	app.Use("/ws", ws.UpgradeMiddleware(deps.Auth))
 	app.Get("/ws", ws.Handler(deps.Hub))
+
+	// Serve frontend static files (built React app from ./web/dist)
+	app.Static("/", "./web/dist", fiber.Static{
+		Index:    "index.html",
+		Compress: true,
+	})
+
+	// SPA fallback — unmatched routes serve index.html for React Router
+	app.Get("/*", func(c *fiber.Ctx) error {
+		if file, err := os.Stat("./web/index.html"); err == nil && !file.IsDir() {
+			return c.SendFile("./web/index.html")
+		}
+		return c.Status(fiber.StatusNotFound).SendString("Not Found")
+	})
 
 	return app
 }
