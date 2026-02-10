@@ -130,9 +130,9 @@ export default function LiveLogsPage() {
   const rejectCount = logs.filter((l) => l.action === "REJECT").length
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full p-6 gap-6">
+      {/* Header — static */}
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Real-Time Logs</h1>
           <p className="text-[13px] text-muted-foreground">
@@ -161,8 +161,8 @@ export default function LiveLogsPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Stats — static */}
+      <div className="grid gap-4 md:grid-cols-4 shrink-0">
         <Card>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
@@ -207,8 +207,8 @@ export default function LiveLogsPage() {
         </Card>
       </div>
 
-      {/* Controls */}
-      <Card>
+      {/* Controls — static */}
+      <Card className="shrink-0">
         <CardContent className="p-4">
           <div className="flex flex-wrap items-center gap-4">
             <Button
@@ -277,15 +277,15 @@ export default function LiveLogsPage() {
         </CardContent>
       </Card>
 
-      {/* Log Stream */}
-      <Card>
-        <CardContent className="p-0">
+      {/* Log Stream — fills remaining height, scrollable */}
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <CardContent className="p-0 flex-1 overflow-hidden">
           <div
             ref={scrollRef}
-            className="h-[500px] overflow-y-auto font-mono text-xs"
+            className="h-full overflow-y-auto font-mono text-xs"
           >
             <table className="w-full">
-              <thead className="sticky top-0 bg-card border-b">
+              <thead className="sticky top-0 bg-card z-10 border-b">
                 <tr className="text-left">
                   <th className="px-4 py-2 font-medium text-muted-foreground">Time</th>
                   <th className="px-4 py-2 font-medium text-muted-foreground">Dir</th>
