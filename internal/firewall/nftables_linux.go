@@ -434,5 +434,40 @@ func uint16BE(v uint16) []byte {
 	return b
 }
 
+// SetupNFLOG installs NFLOG rules in the nftables chains so that
+// the kernel copies packet metadata to userspace via netlink.
+func (b *NFTablesBackend) SetupNFLOG(group uint16) error {
+	// Add a log rule at the start of the input chain.
+	b.conn.AddRule(&nftables.Rule{
+		Table: b.table,
+		Chain: b.inChain,
+		Exprs: []expr.Any{
+			&expr.Log{
+				Group:   group,
+				Snaplen: 128,
+			},
+		},
+	})
+
+	// Add a log rule at the start of the output chain.
+	b.conn.AddRule(&nftables.Rule{
+		Table: b.table,
+		Chain: b.outChain,
+		Exprs: []expr.Any{
+			&expr.Log{
+				Group:   group,
+				Snaplen: 128,
+			},
+		},
+	})
+
+	if err := b.conn.Flush(); err != nil {
+		return fmt.Errorf("nftables: flush NFLOG rules: %w", err)
+	}
+
+	b.logger.Info("nftables: NFLOG rules installed", "group", group)
+	return nil
+}
+
 // Ensure compile-time interface compliance.
 var _ Backend = (*NFTablesBackend)(nil)

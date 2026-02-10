@@ -218,3 +218,38 @@ func (b *IPTablesBackend) EnsurePort(port int, protocol, action string) error {
 
 	return b.AddRule(rule)
 }
+
+// SetupNFLOG installs NFLOG rules in the INPUT and OUTPUT chains so that
+// the kernel copies packet metadata to userspace via netlink. This is used
+// by the real-time traffic monitor.
+func (b *IPTablesBackend) SetupNFLOG(group uint16) error {
+	groupStr := strconv.Itoa(int(group))
+
+	// NFLOG rule for INPUT chain — log all incoming packets.
+	inputSpec := []string{"-j", "NFLOG", "--nflog-group", groupStr, "--nflog-prefix", "FM:INPUT:ACCEPT:"}
+	if ok, _ := b.ipt.Exists(iptFilterTable, "INPUT", inputSpec...); !ok {
+		if err := b.ipt.Insert(iptFilterTable, "INPUT", 1, inputSpec...); err != nil {
+			return fmt.Errorf("iptables: insert NFLOG INPUT: %w", err)
+		}
+		b.logger.Info("iptables: NFLOG INPUT rule installed", "group", group)
+	}
+
+	// NFLOG rule for OUTPUT chain — log all outgoing packets.
+	outputSpec := []string{"-j", "NFLOG", "--nflog-group", groupStr, "--nflog-prefix", "FM:OUTPUT:ACCEPT:"}
+	if ok, _ := b.ipt.Exists(iptFilterTable, "OUTPUT", outputSpec...); !ok {
+		if err := b.ipt.Insert(iptFilterTable, "OUTPUT", 1, outputSpec...); err != nil {
+			return fmt.Errorf("iptables: insert NFLOG OUTPUT: %w", err)
+		}
+		b.logger.Info("iptables: NFLOG OUTPUT rule installed", "group", group)
+	}
+
+	// Also log packets that will be dropped by our managed chains.
+	dropInputSpec := []string{"-j", "NFLOG", "--nflog-group", groupStr, "--nflog-prefix", "FM:INPUT:DROP:"}
+	if ok, _ := b.ipt.Exists(iptFilterTable, iptInputChain, dropInputSpec...); !ok {
+		if err := b.ipt.Insert(iptFilterTable, iptInputChain, 1, dropInputSpec...); err != nil {
+			b.logger.Warn("iptables: could not insert NFLOG in managed chain", "error", err)
+		}
+	}
+
+	return nil
+}

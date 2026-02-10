@@ -65,3 +65,8 @@ func (b *IPTablesBackend) EnsurePort(port int, protocol, action string) error {
 	b.logger.Info("iptables-stub: port ensured", "port", port)
 	return nil
 }
+
+func (b *IPTablesBackend) SetupNFLOG(group uint16) error {
+	b.logger.Info("iptables-stub: NFLOG setup skipped (non-Linux)", "group", group)
+	return nil
+}

@@ -37,6 +37,9 @@ type Backend interface {
 	DeleteRule(id string) error
 	Flush() error
 	EnsurePort(port int, protocol, action string) error
+	// SetupNFLOG installs NFLOG rules so the kernel sends packet metadata
+	// to userspace (NFLOG group 100) for live traffic monitoring.
+	SetupNFLOG(group uint16) error
 }
 
 // Manager is the concrete implementation with concurrency safety.
@@ -227,4 +230,18 @@ func (m *Manager) RemoveImmutablePort(port int) {
 	}
 	m.immutablePorts = filtered
 	m.logger.Info("Immutable port removed from runtime list", "port", port)
+}
+
+// SetupTrafficMonitoring installs NFLOG rules in the kernel so that
+// incoming and outgoing packets are sent to userspace for live monitoring.
+func (m *Manager) SetupTrafficMonitoring(nflogGroup uint16) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if err := m.backend.SetupNFLOG(nflogGroup); err != nil {
+		return fmt.Errorf("setup NFLOG: %w", err)
+	}
+
+	m.logger.Info("Traffic monitoring NFLOG rules installed", "group", nflogGroup)
+	return nil
 }

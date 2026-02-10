@@ -65,3 +65,8 @@ func (b *NFTablesBackend) EnsurePort(port int, protocol, action string) error {
 	b.logger.Info("nftables-stub: port ensured", "port", port)
 	return nil
 }
+
+func (b *NFTablesBackend) SetupNFLOG(group uint16) error {
+	b.logger.Info("nftables-stub: NFLOG setup skipped (non-Linux)", "group", group)
+	return nil
+}

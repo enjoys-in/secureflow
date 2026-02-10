@@ -14,6 +14,7 @@ import (
 	"github.com/enjoys-in/secureflow/internal/db"
 	"github.com/enjoys-in/secureflow/internal/fga"
 	"github.com/enjoys-in/secureflow/internal/firewall"
+	"github.com/enjoys-in/secureflow/internal/realtime"
 	"github.com/enjoys-in/secureflow/internal/repository"
 	"github.com/enjoys-in/secureflow/internal/security"
 	"github.com/enjoys-in/secureflow/internal/websocket"
@@ -96,6 +97,20 @@ func main() {
 	hub := websocket.NewHub(appLogger)
 	go hub.Run()
 
+	// Setup live traffic monitoring (NFLOG → WebSocket)
+	if err := fwManager.SetupTrafficMonitoring(realtime.NFLOGGroup); err != nil {
+		appLogger.Error("Failed to setup NFLOG rules (live traffic may not work)", "error", err)
+	}
+
+	trafficMonitor := realtime.NewNFLOGMonitor(appLogger)
+	trafficBridge := realtime.NewBridge(trafficMonitor, hub, appLogger)
+	trafficCtx, trafficCancel := context.WithCancel(context.Background())
+	go func() {
+		if err := trafficBridge.Run(trafficCtx); err != nil && trafficCtx.Err() == nil {
+			appLogger.Error("Traffic monitor error", "error", err)
+		}
+	}()
+
 	// Setup and start API server
 	server := api.NewServer(api.ServerDeps{
 		Config:            cfg,
@@ -133,6 +148,7 @@ func main() {
 
 	<-ctx.Done()
 	appLogger.Info("Shutting down gracefully...")
+	trafficCancel() // stop traffic monitor
 	hub.Shutdown()
 	if err := server.Shutdown(); err != nil {
 		appLogger.Error("Server shutdown error", "error", err)
