@@ -2,7 +2,7 @@ version: "3.9"
 name: firewall_manager
 services:
   postgres:
-    image: postgres:15
+    image: postgres:16
     container_name: fm_postgres
     environment:
       POSTGRES_USER: fm_user
@@ -46,6 +46,7 @@ services:
       LOG_FORMAT: "json"
       TLS_ENABLED: "false"
       IMMUTABLE_PORTS: "22,25,465,587,3306,6379"
+      ALLOW_ORIGINS: http://localhost:5173
     ports:
       - "8443:8443"
     cap_add:

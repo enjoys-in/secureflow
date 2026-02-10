@@ -20,6 +20,7 @@ RUN apk add --no-cache ca-certificates iptables ip6tables nftables
 WORKDIR /app
 
 COPY --from=builder /firewall-manager .
+COPY --from=builder /app/migrations ./migrations
 
 EXPOSE 8443
 
