@@ -140,16 +140,16 @@ func NewServer(deps ServerDeps) *fiber.App {
 	app.Use("/ws", ws.UpgradeMiddleware(deps.Auth))
 	app.Get("/ws", ws.Handler(deps.Hub))
 
-	// Serve frontend static files (built React app from ./web/dist)
-	app.Static("/", "./web/dist", fiber.Static{
+	// Serve frontend static files (built React app from ./dist)
+	app.Static("/", "./dist", fiber.Static{
 		Index:    "index.html",
 		Compress: true,
 	})
 
 	// SPA fallback — unmatched routes serve index.html for React Router
 	app.Get("/*", func(c *fiber.Ctx) error {
-		if file, err := os.Stat("./web/index.html"); err == nil && !file.IsDir() {
-			return c.SendFile("./web/index.html")
+		if file, err := os.Stat("./dist/index.html"); err == nil && !file.IsDir() {
+			return c.SendFile("./dist/index.html")
 		}
 		return c.Status(fiber.StatusNotFound).SendString("Not Found")
 	})

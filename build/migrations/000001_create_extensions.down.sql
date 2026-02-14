@@ -1,0 +1,1 @@
+-- Extensions cannot be safely dropped in rollback
