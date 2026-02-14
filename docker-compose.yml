@@ -61,6 +61,7 @@ services:
       - "8443:8443"
     cap_add:
       - NET_ADMIN
+      - NET_RAW
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,6 +69,14 @@ services:
         condition: service_started
     volumes:
       - /lib/modules:/lib/modules:ro
+    networks:
+      - host
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8443/health || exit 1"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
 
 volumes:
   pgdata:

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -29,143 +29,21 @@ import {
   RefreshCw,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react"
+import { getAuditLogs, type AuditLogDTO } from "@/lib/handlers"
 
-interface AuditLog {
-  id: string
-  timestamp: string
-  user: string
-  userEmail: string
-  action: string
-  actionType: "create" | "delete" | "update" | "login" | "invite" | "apply"
-  resource: string
-  resourceType: string
-  details: string
-  ipAddress: string
+type ActionType = "create" | "delete" | "update" | "login" | "invite" | "apply"
+
+function inferActionType(action: string): ActionType {
+  const lower = action.toLowerCase()
+  if (lower.includes("delete") || lower.includes("remove")) return "delete"
+  if (lower.includes("update") || lower.includes("edit") || lower.includes("modify")) return "update"
+  if (lower.includes("login") || lower.includes("sign in") || lower.includes("logged in")) return "login"
+  if (lower.includes("invite")) return "invite"
+  if (lower.includes("apply") || lower.includes("applied")) return "apply"
+  return "create"
 }
-
-const mockLogs: AuditLog[] = [
-  {
-    id: "log-001",
-    timestamp: "2026-02-10 14:32:15",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Created firewall rule",
-    actionType: "create",
-    resource: "rule-012",
-    resourceType: "Firewall Rule",
-    details: "Allow TCP 443 from 0.0.0.0/0 in Web Servers group",
-    ipAddress: "192.168.1.5",
-  },
-  {
-    id: "log-002",
-    timestamp: "2026-02-10 14:28:03",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Applied security group",
-    actionType: "apply",
-    resource: "sg-001",
-    resourceType: "Security Group",
-    details: "Applied 'Web Servers' to vps-1 (192.168.1.10)",
-    ipAddress: "192.168.1.5",
-  },
-  {
-    id: "log-003",
-    timestamp: "2026-02-10 13:15:42",
-    user: "John Doe",
-    userEmail: "john@example.com",
-    action: "Updated security group",
-    actionType: "update",
-    resource: "sg-003",
-    resourceType: "Security Group",
-    details: "Modified 'Monitoring' - added port 9090/TCP",
-    ipAddress: "10.0.0.15",
-  },
-  {
-    id: "log-004",
-    timestamp: "2026-02-10 12:45:00",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Invited member",
-    actionType: "invite",
-    resource: "inv-001",
-    resourceType: "Invitation",
-    details: "Invited newmember@example.com as editor",
-    ipAddress: "192.168.1.5",
-  },
-  {
-    id: "log-005",
-    timestamp: "2026-02-10 11:30:22",
-    user: "Jane Smith",
-    userEmail: "jane@example.com",
-    action: "Deleted firewall rule",
-    actionType: "delete",
-    resource: "rule-008",
-    resourceType: "Firewall Rule",
-    details: "Removed 'Block UDP 8080' from Monitoring group",
-    ipAddress: "10.0.0.20",
-  },
-  {
-    id: "log-006",
-    timestamp: "2026-02-10 10:12:33",
-    user: "Bob Wilson",
-    userEmail: "bob@example.com",
-    action: "Logged in",
-    actionType: "login",
-    resource: "session-445",
-    resourceType: "Auth",
-    details: "Successful login via email/password",
-    ipAddress: "172.16.0.50",
-  },
-  {
-    id: "log-007",
-    timestamp: "2026-02-10 09:55:18",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Created security group",
-    actionType: "create",
-    resource: "sg-005",
-    resourceType: "Security Group",
-    details: "Created 'Staging Servers' group",
-    ipAddress: "192.168.1.5",
-  },
-  {
-    id: "log-008",
-    timestamp: "2026-02-09 23:12:00",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Updated firewall rule",
-    actionType: "update",
-    resource: "rule-006",
-    resourceType: "Firewall Rule",
-    details: "Updated source IP from 185.143.223.0/24 to 185.143.0.0/16",
-    ipAddress: "192.168.1.5",
-  },
-  {
-    id: "log-009",
-    timestamp: "2026-02-09 20:30:45",
-    user: "John Doe",
-    userEmail: "john@example.com",
-    action: "Logged in",
-    actionType: "login",
-    resource: "session-443",
-    resourceType: "Auth",
-    details: "Successful login via email/password",
-    ipAddress: "10.0.0.15",
-  },
-  {
-    id: "log-010",
-    timestamp: "2026-02-09 18:00:12",
-    user: "Admin User",
-    userEmail: "admin@example.com",
-    action: "Attempted to modify protected port",
-    actionType: "update",
-    resource: "port-22",
-    resourceType: "Protected Port",
-    details: "Blocked: Cannot modify immutable port 22 (SSH)",
-    ipAddress: "192.168.1.5",
-  },
-]
 
 const actionTypeIcons = {
   create: <Plus className="h-3.5 w-3.5" />,
@@ -185,24 +63,48 @@ const actionTypeColors = {
   apply: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 }
 
+const PAGE_SIZE = 25
+
 export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [actionFilter, setActionFilter] = useState("all")
+  const [logs, setLogs] = useState<AuditLogDTO[]>([])
+  const [loading, setLoading] = useState(true)
+  const [offset, setOffset] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+
+  const fetchLogs = useCallback(async (currentOffset: number) => {
+    setLoading(true)
+    try {
+      const data = await getAuditLogs({ limit: PAGE_SIZE, offset: currentOffset })
+      setLogs(data.audit_logs ?? [])
+      setHasMore((data.audit_logs?.length ?? 0) >= PAGE_SIZE)
+    } catch (err) {
+      console.error("Failed to fetch audit logs:", err)
+      setLogs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     logActivity({ timestamp: new Date().toISOString(), page: "AuditLogs", action: "PAGE_VIEW" })
-  }, [])
+    fetchLogs(offset)
+  }, [offset, fetchLogs])
 
-  const filteredLogs = mockLogs.filter((log) => {
+  const filteredLogs = logs.filter((log) => {
     const matchesSearch =
       log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.user_name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.user_email ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (log.details ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.resource.includes(searchQuery)
-    const matchesAction = actionFilter === "all" || log.actionType === actionFilter
+    const actionType = inferActionType(log.action)
+    const matchesAction = actionFilter === "all" || actionType === actionFilter
     return matchesSearch && matchesAction
   })
 
+  const currentPage = Math.floor(offset / PAGE_SIZE) + 1
   return (
     <div className="flex flex-col h-full p-6 gap-6">
       {/* Header — static */}
@@ -218,8 +120,8 @@ export default function AuditLogsPage() {
             <Download className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
-          <Button variant="outline" size="sm">
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => fetchLogs(offset)} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
@@ -276,54 +178,76 @@ export default function AuditLogsPage() {
               </tr>
             </thead>
             <TableBody>
-              {filteredLogs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell className="whitespace-nowrap">
-                    <span className="text-sm font-mono">{log.timestamp}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[10px]">
-                          {log.user
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">{log.user}</span>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading audit logs...
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div
-                      className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
-                        actionTypeColors[log.actionType]
-                      }`}
-                    >
-                      {actionTypeIcons[log.actionType]}
-                      {log.action}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                        {log.resource}
-                      </code>
-                      <p className="text-xs text-muted-foreground mt-0.5">{log.resourceType}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <p className="text-sm text-muted-foreground max-w-[300px] truncate">
-                      {log.details}
-                    </p>
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                      {log.ipAddress}
-                    </code>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : filteredLogs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                    No audit logs found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredLogs.map((log) => {
+                  const actionType = inferActionType(log.action)
+                  return (
+                    <TableRow key={log.id}>
+                      <TableCell className="whitespace-nowrap">
+                        <span className="text-sm font-mono">
+                          {new Date(log.timestamp).toLocaleString()}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-[10px]">
+                              {log.user_name
+                                ? log.user_name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                : log.user_id.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">{log.user_name || "Unknown"}</span>
+                            <span className="text-xs text-muted-foreground">{log.user_email || log.user_id.slice(0, 8)}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${actionTypeColors[actionType]}`}
+                        >
+                          {actionTypeIcons[actionType]}
+                          {log.action}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {log.resource}
+                        </code>
+                      </TableCell>
+                      <TableCell>
+                        <p className="text-sm text-muted-foreground max-w-[300px] truncate">
+                          {log.details}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {log.ip}
+                        </code>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </table>
           </div>
@@ -333,14 +257,24 @@ export default function AuditLogsPage() {
       {/* Pagination — static */}
       <div className="flex items-center justify-between shrink-0">
         <p className="text-sm text-muted-foreground">
-          Page 1 of 1 · {filteredLogs.length} total entries
+          Page {currentPage} · {filteredLogs.length} entries shown
         </p>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={offset === 0 || loading}
+            onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
+          >
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasMore || loading}
+            onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
+          >
             Next
             <ChevronRight className="h-4 w-4" />
           </Button>

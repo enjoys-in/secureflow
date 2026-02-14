@@ -25,7 +25,7 @@ done
 # ---------- Register ----------
 http_code=$(curl -s -o /tmp/register_response.json -w "%{http_code}" \
   --request POST \
-  --url http://localhost:8443/api/v1/auth/register \
+  --url http://localhost:8443/api/v1/auth/register-admin \
   --header 'Content-Type: application/json' \
   --data "{\"email\":\"$email\",\"name\":\"$name\",\"password\":\"$password\"}")
 

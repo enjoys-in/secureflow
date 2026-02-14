@@ -69,6 +69,13 @@ type AuditLog struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// AuditLogWithUser extends AuditLog with user info.
+type AuditLogWithUser struct {
+	AuditLog
+	UserEmail string `json:"user_email"`
+	UserName  string `json:"user_name"`
+}
+
 // Invitation tracks pending user invitations.
 type Invitation struct {
 	ID         string     `json:"id"`

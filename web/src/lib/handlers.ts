@@ -98,6 +98,8 @@ export interface ImmutablePortDTO {
 export interface AuditLogDTO {
     id: string
     user_id: string
+    user_email: string
+    user_name: string
     action: string
     resource: string
     details: string
@@ -251,7 +253,7 @@ export async function inviteUser(payload: InviteUserPayload, signal?: AbortSigna
 // ---- Audit Logs ----
 
 export async function getAuditLogs(params?: { limit?: number; offset?: number }, signal?: AbortSignal) {
-    const { data } = await api.get<{ audit_logs: AuditLogDTO[]; limit: number; offset: number }>("/audit-logs", {
+    const { data } = await api.get<{ audit_logs: AuditLogDTO[]; limit: number; offset: number }>("/logs/audit", {
         params,
         signal,
     })

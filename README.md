@@ -87,8 +87,8 @@ go run ./cmd/server
 |--------|------|-------------|
 | GET | `/api/v1/users/me` | Get current user |
 | POST | `/api/v1/users/invite` | Invite user (admin) |
-| GET | `/api/v1/audit-logs` | Get audit logs |
-| GET | `/api/v1/events/ws` | WebSocket live events |
+| GET | `/api/v1/logs/audit` | Get audit logs |
+| GET | `/ws` | WebSocket live events |
 | GET | `/api/v1/health` | Health check |
 
 ## Immutable Ports

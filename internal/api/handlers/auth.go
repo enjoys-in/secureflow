@@ -7,6 +7,7 @@ import (
 
 	"github.com/enjoys-in/secureflow/internal/constants"
 	"github.com/enjoys-in/secureflow/internal/db"
+	"github.com/enjoys-in/secureflow/internal/fga"
 	"github.com/enjoys-in/secureflow/internal/repository"
 	"github.com/enjoys-in/secureflow/internal/security"
 )
@@ -19,11 +20,12 @@ type AuthHandler struct {
 	userRepo  repository.UserRepository
 	invRepo   repository.InvitationRepository
 	auditRepo repository.AuditLogRepository
+	fgaClient *fga.Client
 }
 
 // NewAuthHandler creates a new auth handler.
-func NewAuthHandler(auth *security.AuthService, userRepo repository.UserRepository, invRepo repository.InvitationRepository, auditRepo repository.AuditLogRepository) *AuthHandler {
-	return &AuthHandler{auth: auth, userRepo: userRepo, invRepo: invRepo, auditRepo: auditRepo}
+func NewAuthHandler(auth *security.AuthService, userRepo repository.UserRepository, invRepo repository.InvitationRepository, auditRepo repository.AuditLogRepository, fgaClient *fga.Client) *AuthHandler {
+	return &AuthHandler{auth: auth, userRepo: userRepo, invRepo: invRepo, auditRepo: auditRepo, fgaClient: fgaClient}
 }
 
 // RegisterRequest is the request body for registration.
@@ -131,6 +133,54 @@ func (h *AuthHandler) AcceptInvite(c *fiber.Ctx) error {
 		"user":    user,
 		"token":   jwtToken,
 		"role":    inv.Role,
+	})
+}
+
+// RegisterAdmin creates a new admin/owner account with full super-admin permissions.
+func (h *AuthHandler) RegisterAdmin(c *fiber.Ctx) error {
+	var req RegisterRequest
+	if err := c.BodyParser(&req); err != nil {
+		return constants.ErrInvalidRequestBody
+	}
+
+	if req.Email == "" || req.Name == "" || req.Password == "" {
+		return constants.ErrMissingRequiredFields
+	}
+
+	if len(req.Password) < constants.MinPasswordLength {
+		return constants.ErrPasswordTooShort
+	}
+
+	// Register user in DB and assign admin role via auth service
+	user, token, err := h.auth.Register(c.Context(), req.Email, req.Name, req.Password, constants.RoleAdmin)
+	if err != nil {
+		return constants.ErrUserAlreadyExists.Wrap(err)
+	}
+
+	// Assign owner (super-admin) tuples on system and firewall objects
+	if h.fgaClient != nil {
+		_ = fga.AssignRole(c.Context(), h.fgaClient, user.ID, constants.RelationOwner)
+
+		userKey := "user:" + user.ID
+		_ = h.fgaClient.WriteTuple(c.Context(), userKey, constants.RelationOwner, constants.FGAObjectFirewall)
+	}
+
+	// Audit log
+	_ = h.auditRepo.Create(c.Context(), &db.AuditLog{
+		UserID:   user.ID,
+		Action:   constants.AuditActionRegister,
+		Resource: "auth",
+		Details:  "admin user registered with owner permissions",
+		IP:       c.IP(),
+	})
+
+	setAuthCookie(c, token)
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"message": "admin registered",
+		"user":    user,
+		"token":   token,
+		"role":    constants.RelationOwner,
 	})
 }
 

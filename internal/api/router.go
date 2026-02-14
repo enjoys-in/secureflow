@@ -57,7 +57,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 
 	// ---- Handlers ----
 	healthH := handlers.NewHealthHandler(deps.DB)
-	authH := handlers.NewAuthHandler(deps.Auth, deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo)
+	authH := handlers.NewAuthHandler(deps.Auth, deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.FGA)
 	firewallH := handlers.NewFirewallHandler(deps.FirewallRuleRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
 	profileH := handlers.NewProfileHandler(deps.SecurityGroupRepo, deps.FirewallRuleRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
 	userH := handlers.NewUserHandler(deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.Auth, deps.FGA)
@@ -77,6 +77,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// Auth (public)
 	auth := v1.Group("/auth")
 	auth.Post("/register", authH.Register)
+	auth.Post("/register-admin", authH.RegisterAdmin)
 	auth.Post("/login", authH.Login)
 	auth.Post("/accept-invite", authH.AcceptInvite)
 
@@ -108,7 +109,9 @@ func NewServer(deps ServerDeps) *fiber.App {
 
 	// Audit logs (viewer+)
 	logs := protected.Group("/logs")
-	logs.Get("/", permMW.RequirePermission(constants.RelationCanView, constants.FGAObjectSystem), logsH.ListAuditLogs)
+	logs.Get("/audit",
+		permMW.RequirePermission(constants.RelationCanView, constants.FGAObjectSystem),
+		logsH.ListAuditLogs)
 
 	// Immutable ports (admin only)
 	ports := protected.Group("/ports")
@@ -133,6 +136,11 @@ func NewServer(deps ServerDeps) *fiber.App {
 		}
 		return c.Status(fiber.StatusNotFound).SendString("Not Found")
 	})
-
+	app.All("*", func(c *fiber.Ctx) error {
+		if file, err := os.Stat("./web/index.html"); err == nil && !file.IsDir() {
+			return c.SendFile("./web/index.html")
+		}
+		return c.Status(fiber.StatusNotFound).SendString("Not Found")
+	})
 	return app
 }
