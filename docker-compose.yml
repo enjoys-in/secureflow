@@ -2,7 +2,11 @@ version: "3.9"
 name: firewall_manager
 services:
   web:
-    build: ./web
+    build:
+    context: ./web
+    args:
+        VITE_API_URL: https://firewall.enjoys.in/api/v1
+        VITE_APP_ENV: production    
     container_name: fm_web
     ports:
       - "4173:4173"
