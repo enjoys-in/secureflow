@@ -10,7 +10,8 @@ services:
     depends_on:
       - firewall-api
     environment:
-      - VITE_API_URL=https://firewall-api:8443/api/v1
+      - VITE_API_URL=https://firewall-api:8443/api/v1 #  replace with real API URL in production
+      - VITE_APP_ENV=DEVELOPMENT
   postgres:
     image: postgres:15
     container_name: fm_postgres
