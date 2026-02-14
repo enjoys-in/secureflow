@@ -6,6 +6,23 @@ BUILD_DIR="./build"
 WEB_DIR="./web"
 GO_ENTRY="./cmd/server"
 
+# ---- Parse CLI flags ----
+for arg in "$@"; do
+  case "$arg" in
+    --target=*)
+      BUILD_OS="${arg#*=}"
+      ;;
+    --arch=*)
+      BUILD_ARCH="${arg#*=}"
+      ;;
+    *)
+      echo "Unknown option: $arg"
+      echo "Usage: bash build.sh [--target=linux|windows|darwin] [--arch=amd64|arm64]"
+      exit 1
+      ;;
+  esac
+done
+
 echo "========================================"
 echo "  Building $APP_NAME"
 echo "========================================"
