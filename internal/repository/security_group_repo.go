@@ -11,6 +11,7 @@ import (
 // SecurityGroupRepository defines the interface for security group data access.
 type SecurityGroupRepository interface {
 	Repository[db.SecurityGroup]
+	FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.SecurityGroupWithDetails, error)
 	AttachToServer(ctx context.Context, serverID, sgID, userID string) error
 	DetachFromServer(ctx context.Context, serverID, sgID string) error
 	ListByServer(ctx context.Context, serverID string) ([]db.SecurityGroup, error)
@@ -75,6 +76,42 @@ func (r *securityGroupRepo) Create(ctx context.Context, sg *db.SecurityGroup) er
 		`INSERT INTO security_groups (name, description, created_by) VALUES ($1, $2, $3) RETURNING id, created_at, updated_at`,
 		sg.Name, sg.Description, sg.CreatedBy,
 	).Scan(&sg.ID, &sg.CreatedAt, &sg.UpdatedAt)
+}
+
+func (r *securityGroupRepo) FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.SecurityGroupWithDetails, error) {
+	query := `SELECT sg.id, sg.name, sg.description, sg.created_by, sg.created_at, sg.updated_at,
+		COUNT(fr.id) AS rule_count,
+		COUNT(fr.id) FILTER (WHERE fr.direction = 'inbound') AS inbound_count,
+		COUNT(fr.id) FILTER (WHERE fr.direction = 'outbound') AS outbound_count,
+		COALESCE(u.name, '') AS created_by_name,
+		COALESCE(u.email, '') AS created_by_email
+		FROM security_groups sg
+		LEFT JOIN firewall_rules fr ON fr.security_group_id = sg.id
+		LEFT JOIN users u ON sg.created_by = u.id::text
+		GROUP BY sg.id, sg.name, sg.description, sg.created_by, sg.created_at, sg.updated_at,
+			u.name, u.email
+		ORDER BY sg.created_at DESC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := r.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var groups []db.SecurityGroupWithDetails
+	for rows.Next() {
+		var g db.SecurityGroupWithDetails
+		if err := rows.Scan(
+			&g.ID, &g.Name, &g.Description, &g.CreatedBy, &g.CreatedAt, &g.UpdatedAt,
+			&g.RuleCount, &g.InboundCount, &g.OutboundCount,
+			&g.CreatedByName, &g.CreatedByEmail,
+		); err != nil {
+			return nil, err
+		}
+		groups = append(groups, g)
+	}
+	return groups, rows.Err()
 }
 
 func (r *securityGroupRepo) FindByIDAndUpdate(ctx context.Context, id string, updates map[string]interface{}) (*db.SecurityGroup, error) {

@@ -34,9 +34,9 @@ type CreateSecurityGroupRequest struct {
 	Description string `json:"description,omitempty"`
 }
 
-// ListSecurityGroups returns all security groups.
+// ListSecurityGroups returns all security groups with rule counts and creator info.
 func (h *ProfileHandler) ListSecurityGroups(c *fiber.Ctx) error {
-	groups, err := h.sgRepo.FindAll(c.Context(), nil, constants.MaxPageLimit, 0)
+	groups, err := h.sgRepo.FindAllWithDetails(c.Context(), constants.MaxPageLimit, 0)
 	if err != nil {
 		return constants.ErrDatabaseFailure.Wrap(err)
 	}

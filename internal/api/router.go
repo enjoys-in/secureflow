@@ -37,6 +37,7 @@ type ServerDeps struct {
 	AuditLogRepo      repository.AuditLogRepository
 	InvitationRepo    repository.InvitationRepository
 	ImmutablePortRepo repository.ImmutablePortRepository
+	BlockedIPRepo     repository.BlockedIPRepository
 }
 
 // NewServer creates and configures the Fiber application with all routes.
@@ -63,6 +64,9 @@ func NewServer(deps ServerDeps) *fiber.App {
 	userH := handlers.NewUserHandler(deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.Auth, deps.FGA)
 	logsH := handlers.NewLogsHandler(deps.AuditLogRepo)
 	portsH := handlers.NewImmutablePortsHandler(deps.ImmutablePortRepo, deps.AuditLogRepo)
+	sysPortsH := handlers.NewSystemPortsHandler()
+	processH := handlers.NewProcessHandler()
+	blockedIPH := handlers.NewBlockedIPHandler(deps.BlockedIPRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
 
 	// ---- Middleware ----
 	authMW := middleware.NewAuthMiddleware(deps.Auth)
@@ -87,8 +91,21 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// Firewall rules (editor+)
 	rules := protected.Group("/rules")
 	rules.Get("/", firewallH.ListRules)
+	rules.Get("/all", firewallH.ListAllRulesWithDetails)
 	rules.Post("/", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), firewallH.AddRule)
 	rules.Delete("/:id", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), firewallH.DeleteRule)
+
+	// System info
+	system := protected.Group("/system")
+	system.Get("/ports", sysPortsH.ListListeningPorts)
+	system.Get("/processes", processH.ListProcesses)
+
+	// Blocked IPs (editor+)
+	blockedIPs := protected.Group("/blocked-ips")
+	blockedIPs.Get("/", blockedIPH.ListBlockedIPs)
+	blockedIPs.Post("/block", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), blockedIPH.BlockIPs)
+	blockedIPs.Post("/unblock", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), blockedIPH.UnblockIPs)
+	blockedIPs.Post("/reblock/:id", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), blockedIPH.ReblockIP)
 
 	// Security groups / profiles (editor+)
 	profiles := protected.Group("/profiles")
@@ -105,6 +122,8 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// Users (admin only)
 	users := protected.Group("/users")
 	users.Get("/me", userH.GetCurrentUser)
+	users.Get("/members", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.ListMembers)
+	users.Get("/invitations", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.ListInvitations)
 	users.Post("/invite", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.InviteUser)
 
 	// Audit logs (viewer+)
@@ -134,11 +153,6 @@ func NewServer(deps ServerDeps) *fiber.App {
 		}
 		return c.Status(fiber.StatusNotFound).SendString("Not Found")
 	})
-	app.All("*", func(c *fiber.Ctx) error {
-		if file, err := os.Stat("./web/index.html"); err == nil && !file.IsDir() {
-			return c.SendFile("./web/index.html")
-		}
-		return c.Status(fiber.StatusNotFound).SendString("Not Found")
-	})
+
 	return app
 }

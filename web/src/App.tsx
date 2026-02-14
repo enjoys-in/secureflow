@@ -12,6 +12,7 @@ import MembersPage from "@/pages/members"
 import AuditLogsPage from "@/pages/audit-logs"
 import LiveLogsPage from "@/pages/live-logs"
 import BlockedIpsPage from "@/pages/blocked-ips"
+import ProcessesPage from "@/pages/processes"
 import SettingsPage from "@/pages/settings"
 import { WebSocketProvider } from "./contexts/websocket-context"
 
@@ -37,6 +38,7 @@ function App() {
             <Route path="/firewall-rules" element={<FirewallRulesPage />} />
             <Route path="/immutable-ports" element={<ImmutablePortsPage />} />
             <Route path="/blocked-ips" element={<BlockedIpsPage />} />
+            <Route path="/processes" element={<ProcessesPage />} />
             <Route path="/members" element={<MembersPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />
             <Route path="/live-logs" element={<WebSocketProvider>

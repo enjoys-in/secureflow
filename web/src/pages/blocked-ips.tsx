@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,11 +34,19 @@ import {
   Ban,
   CheckCircle2,
   Clock,
+  Loader2,
+  RefreshCw,
   Search,
   ShieldBan,
   ShieldCheck,
 } from "lucide-react"
-import { logActivity } from "@/types"
+import {
+  listBlockedIPs,
+  blockIPs,
+  unblockIPs,
+  reblockIP,
+  type BlockedIPDTO,
+} from "@/lib/handlers"
 
 // ---- IP Validation ----
 
@@ -93,31 +101,13 @@ function parseIpInput(raw: string): { valid: string[]; invalid: string[] } {
   return { valid, invalid }
 }
 
-// ---- Types ----
-
-interface BlockedIp {
-  id: string
-  ip: string
-  reason: string
-  blockedBy: string
-  blockedAt: string
-  status: "blocked" | "unblocked"
-}
-
-// ---- Mock data ----
-
-const initialBlockedIps: BlockedIp[] = [
-  { id: "blk-001", ip: "185.143.223.45", reason: "Brute-force SSH attempts", blockedBy: "Admin User", blockedAt: "2026-02-08 14:23", status: "blocked" },
-  { id: "blk-002", ip: "203.0.113.10", reason: "Port scanning detected", blockedBy: "Admin User", blockedAt: "2026-02-07 09:15", status: "blocked" },
-  { id: "blk-003", ip: "45.33.32.156", reason: "DDoS source", blockedBy: "John Doe", blockedAt: "2026-02-05 18:40", status: "blocked" },
-  { id: "blk-004", ip: "198.51.100.0/24", reason: "Malicious subnet", blockedBy: "Admin User", blockedAt: "2026-02-03 11:00", status: "blocked" },
-  { id: "blk-005", ip: "93.184.216.34", reason: "Spam traffic", blockedBy: "Jane Smith", blockedAt: "2026-01-28 16:55", status: "unblocked" },
-]
-
 // ---- Page ----
 
 export default function BlockedIpsPage() {
-  const [blockedIps, setBlockedIps] = useState<BlockedIp[]>(initialBlockedIps)
+  const [blockedIps, setBlockedIps] = useState<BlockedIPDTO[]>([])
+  const [loading, setLoading] = useState(true)
+  const [blockedCount, setBlockedCount] = useState(0)
+  const [unblockedCount, setUnblockedCount] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
 
@@ -132,6 +122,28 @@ export default function BlockedIpsPage() {
   const [unblockInput, setUnblockInput] = useState("")
   const [unblockResult, setUnblockResult] = useState<{ valid: string[]; invalid: string[] } | null>(null)
 
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true)
+    try {
+      const data = await listBlockedIPs({ status: "all", limit: 200, offset: 0 }, signal)
+      setBlockedIps(data.blocked_ips ?? [])
+      setBlockedCount(data.blocked_count)
+      setUnblockedCount(data.unblocked_count)
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== "CanceledError") {
+        console.error("Failed to fetch blocked IPs:", err)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const ac = new AbortController()
+    fetchData(ac.signal)
+    return () => ac.abort()
+  }, [fetchData])
+
   const filteredIps = blockedIps.filter((entry) => {
     const matchesSearch =
       !searchQuery ||
@@ -141,8 +153,8 @@ export default function BlockedIpsPage() {
     return matchesSearch && matchesStatus
   })
 
-  const activelyBlocked = blockedIps.filter((e) => e.status === "blocked").length
-  const totalUnblocked = blockedIps.filter((e) => e.status === "unblocked").length
+  const activelyBlocked = blockedCount
+  const totalUnblocked = unblockedCount
 
   // ---- Block IPs ----
   const handleIpInputChange = (value: string) => {
@@ -154,35 +166,20 @@ export default function BlockedIpsPage() {
     }
   }
 
-  const handleBlockSubmit = () => {
+  const handleBlockSubmit = async () => {
     if (!parseResult || parseResult.valid.length === 0) return
 
-    const now = new Date()
-    const timestamp = now.toISOString().replace("T", " ").substring(0, 16)
+    try {
+      await blockIPs({ ips: parseResult.valid, reason: reason.trim() || "Manual block" })
+      await fetchData()
+    } catch (err) {
+      console.error("Failed to block IPs:", err)
+    }
 
-    const newEntries: BlockedIp[] = parseResult.valid
-      .filter((ip) => !blockedIps.some((e) => e.ip === ip && e.status === "blocked"))
-      .map((ip, i) => ({
-        id: `blk-${Date.now()}-${i}`,
-        ip,
-        reason: reason.trim() || "Manual block",
-        blockedBy: "Admin User",
-        blockedAt: timestamp,
-        status: "blocked" as const,
-      }))
-
-    setBlockedIps((prev) => [...newEntries, ...prev])
     setBlockDialogOpen(false)
     setIpInput("")
     setReason("")
     setParseResult(null)
-
-    logActivity({
-      timestamp: new Date().toISOString(),
-      page: "BlockedIPs",
-      action: "BLOCK_IPS",
-      data: { ips: parseResult.valid, reason },
-    })
   }
 
   // ---- Unblock IPs ----
@@ -195,45 +192,37 @@ export default function BlockedIpsPage() {
     }
   }
 
-  const handleUnblockSubmit = () => {
+  const handleUnblockSubmit = async () => {
     if (!unblockResult || unblockResult.valid.length === 0) return
 
-    const ipsToUnblock = new Set(unblockResult.valid)
-    setBlockedIps((prev) =>
-      prev.map((e) =>
-        ipsToUnblock.has(e.ip) && e.status === "blocked"
-          ? { ...e, status: "unblocked" as const }
-          : e
-      )
-    )
+    try {
+      await unblockIPs({ ips: unblockResult.valid })
+      await fetchData()
+    } catch (err) {
+      console.error("Failed to unblock IPs:", err)
+    }
+
     setUnblockDialogOpen(false)
     setUnblockInput("")
     setUnblockResult(null)
-
-    logActivity({
-      timestamp: new Date().toISOString(),
-      page: "BlockedIPs",
-      action: "UNBLOCK_IPS",
-      data: { ips: unblockResult.valid },
-    })
   }
 
-  const handleUnblockSingle = (id: string) => {
-    setBlockedIps((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, status: "unblocked" as const } : e))
-    )
-    logActivity({
-      timestamp: new Date().toISOString(),
-      page: "BlockedIPs",
-      action: "UNBLOCK_IP",
-      data: { id },
-    })
+  const handleUnblockSingle = async (id: string) => {
+    try {
+      await unblockIPs({ id })
+      await fetchData()
+    } catch (err) {
+      console.error("Failed to unblock IP:", err)
+    }
   }
 
-  const handleReblock = (id: string) => {
-    setBlockedIps((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, status: "blocked" as const } : e))
-    )
+  const handleReblock = async (id: string) => {
+    try {
+      await reblockIP(id)
+      await fetchData()
+    } catch (err) {
+      console.error("Failed to re-block IP:", err)
+    }
   }
 
   // Matched IPs for bulk unblock preview
@@ -255,6 +244,10 @@ export default function BlockedIpsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => fetchData()} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Refresh
+          </Button>
           {/* Unblock Dialog */}
           <Dialog open={unblockDialogOpen} onOpenChange={setUnblockDialogOpen}>
             <DialogTrigger asChild>
@@ -494,6 +487,12 @@ export default function BlockedIpsPage() {
       {/* Table — scrollable */}
       <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <CardContent className="p-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Loading blocked IPs…</span>
+            </div>
+          ) : (
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
@@ -534,11 +533,11 @@ export default function BlockedIpsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {entry.blockedBy}
+                    {entry.blocked_by_name || entry.blocked_by_email || "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     <Clock className="inline mr-1 h-3 w-3" />
-                    {entry.blockedAt}
+                    {new Date(entry.blocked_at).toLocaleString()}
                   </TableCell>
                   <TableCell>
                     {entry.status === "blocked" ? (
@@ -565,6 +564,7 @@ export default function BlockedIpsPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>

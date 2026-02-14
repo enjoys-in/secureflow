@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -16,66 +16,46 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Search, Shield, Users, CheckCircle2, Mail, Clock } from "lucide-react"
-import type { User, Invitation, ResourcePermission } from "@/types"
+import { Search, Shield, Users, CheckCircle2, Mail, Clock, Loader2 } from "lucide-react"
+import type { ResourcePermission } from "@/types"
 import { logActivity } from "@/types"
 import { MemberRow, InviteDialog } from "@/components/members"
-
-// ---- Mock data ----
-
-const initialMembers: User[] = [
-  { id: "u-001", name: "Admin User", email: "admin@example.com", role: "admin", status: "active", joinedAt: "2026-01-01", lastActive: "2 minutes ago" },
-  { id: "u-002", name: "John Doe", email: "john@example.com", role: "editor", status: "active", joinedAt: "2026-01-15", lastActive: "1 hour ago" },
-  { id: "u-003", name: "Jane Smith", email: "jane@example.com", role: "editor", status: "active", joinedAt: "2026-01-20", lastActive: "3 hours ago" },
-  { id: "u-004", name: "Bob Wilson", email: "bob@example.com", role: "viewer", status: "active", joinedAt: "2026-02-01", lastActive: "1 day ago" },
-  { id: "u-005", name: "Alice Chen", email: "alice@example.com", role: "viewer", status: "inactive", joinedAt: "2026-02-05", lastActive: "5 days ago" },
-]
-
-const memberPermissions: Record<string, ResourcePermission[]> = {
-  "u-001": [
-    { scope: "system", role: "owner" },
-    { scope: "firewall", role: "owner" },
-    { scope: "security_group", role: "owner" },
-  ],
-  "u-002": [
-    { scope: "system", role: "editor" },
-    { scope: "firewall", role: "admin" },
-    { scope: "security_group", role: "editor" },
-  ],
-  "u-003": [
-    { scope: "firewall", role: "editor" },
-    { scope: "security_group", role: "editor" },
-  ],
-  "u-004": [
-    { scope: "system", role: "viewer" },
-    { scope: "firewall", role: "viewer" },
-  ],
-  "u-005": [
-    { scope: "firewall", role: "viewer" },
-  ],
-}
-
-const initialInvitations: Invitation[] = [
-  {
-    id: "inv-001",
-    email: "sarah@example.com",
-    permissions: [
-      { scope: "firewall", role: "editor" },
-      { scope: "security_group", role: "viewer" },
-    ],
-    invitedBy: "Admin User",
-    invitedAt: "2026-02-08",
-    status: "pending",
-    expiresAt: "2026-02-15",
-  },
-]
+import {
+  listMembers,
+  listInvitations,
+  inviteUser,
+  type MemberDTO,
+  type InvitationWithInviterDTO,
+} from "@/lib/handlers"
 
 // ---- Page ----
 
 export default function MembersPage() {
   const [searchQuery, setSearchQuery] = useState("")
-  const [members] = useState<User[]>(initialMembers)
-  const [invitations, setInvitations] = useState<Invitation[]>(initialInvitations)
+  const [members, setMembers] = useState<MemberDTO[]>([])
+  const [invitations, setInvitations] = useState<InvitationWithInviterDTO[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [membersRes, invRes] = await Promise.all([
+        listMembers(),
+        listInvitations(),
+      ])
+      setMembers(membersRes.members ?? [])
+      setInvitations(invRes.invitations ?? [])
+    } catch (err) {
+      console.error("Failed to fetch members data:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    logActivity({ timestamp: new Date().toISOString(), page: "Members", action: "PAGE_VIEW" })
+    fetchData()
+  }, [fetchData])
 
   const filteredMembers = members.filter(
     (m) =>
@@ -83,34 +63,26 @@ export default function MembersPage() {
       m.email.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  const handleInvite = (email: string, permissions: ResourcePermission[]) => {
-    const inv: Invitation = {
-      id: `inv-${String(invitations.length + 1).padStart(3, "0")}`,
-      email,
-      permissions,
-      invitedBy: "Admin User",
-      invitedAt: new Date().toISOString().slice(0, 10),
-      status: "pending",
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  const handleInvite = async (email: string, _permissions: ResourcePermission[]) => {
+    try {
+      // Use the first permission's role, or default to "viewer"
+      const role = _permissions[0]?.role ?? "viewer"
+      await inviteUser({ email, role })
+      logActivity({
+        timestamp: new Date().toISOString(),
+        page: "Members",
+        action: "INVITE_USER",
+        data: { email, role },
+      })
+      // Refresh invitations list
+      fetchData()
+    } catch (err) {
+      console.error("Failed to invite user:", err)
     }
-    setInvitations((prev) => [...prev, inv])
-    logActivity({
-      timestamp: new Date().toISOString(),
-      page: "Members",
-      action: "INVITE_USER",
-      data: { email, permissions },
-    })
   }
 
-  const activeCount = members.filter((m) => m.status === "active").length
-  const adminCount = members.filter((m) => m.role === "admin").length
-  const pendingCount = invitations.filter((i) => i.status === "pending").length
-
-  const scopeLabels: Record<string, string> = {
-    system: "System",
-    firewall: "Firewall",
-    security_group: "Sec Groups",
-  }
+  const adminCount = members.filter((m) => m.roles?.includes("admin") || m.roles?.includes("owner")).length
+  const pendingCount = invitations.length
 
   const roleColors: Record<string, string> = {
     owner: "bg-amber-600",
@@ -158,7 +130,7 @@ export default function MembersPage() {
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeCount}</div>
+            <div className="text-2xl font-bold">{members.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -212,20 +184,36 @@ export default function MembersPage() {
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
                     <TableHead>Member</TableHead>
-                    <TableHead>Permissions</TableHead>
+                    <TableHead>Roles</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Joined</TableHead>
-                    <TableHead>Last Active</TableHead>
+                    <TableHead>Primary Role</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredMembers.map((member) => (
-                    <MemberRow
-                      key={member.id}
-                      member={member}
-                      permissions={memberPermissions[member.id]}
-                    />
-                  ))}
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center">
+                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading members...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredMembers.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                        No members found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredMembers.map((member) => (
+                      <MemberRow
+                        key={member.id}
+                        member={member}
+                      />
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -240,62 +228,72 @@ export default function MembersPage() {
                 <TableHeader className="sticky top-0 bg-card z-10">
                   <TableRow>
                     <TableHead>Email</TableHead>
-                    <TableHead>Permissions</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Invited By</TableHead>
                     <TableHead>Expires</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invitations
-                    .filter(
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center">
+                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading invitations...
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : invitations.filter(
                       (inv) =>
                         !searchQuery ||
                         inv.email.toLowerCase().includes(searchQuery.toLowerCase())
-                    )
-                    .map((inv) => (
-                      <TableRow key={inv.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">{inv.email}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {inv.permissions.map((p) => (
-                              <Badge
-                                key={`${p.scope}-${p.role}`}
-                                className={`${roleColors[p.role] ?? "bg-gray-500"} text-white text-[10px] px-1.5 py-0`}
-                              >
-                                {scopeLabels[p.scope]}: {p.role}
-                              </Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              inv.status === "pending"
-                                ? "border-amber-500 text-amber-500"
-                                : inv.status === "accepted"
-                                  ? "border-green-500 text-green-500"
-                                  : "border-gray-500 text-gray-500"
-                            }
-                          >
-                            <Clock className="mr-1 h-3 w-3" />
-                            {inv.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {inv.invitedBy}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {inv.expiresAt}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    ).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                        No pending invitations.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    invitations
+                      .filter(
+                        (inv) =>
+                          !searchQuery ||
+                          inv.email.toLowerCase().includes(searchQuery.toLowerCase())
+                      )
+                      .map((inv) => (
+                        <TableRow key={inv.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">{inv.email}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={`${roleColors[inv.role] ?? "bg-gray-500"} text-white text-[10px] px-1.5 py-0`}
+                            >
+                              {inv.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500 text-amber-500"
+                            >
+                              <Clock className="mr-1 h-3 w-3" />
+                              pending
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {inv.inviter_name || inv.inviter_email || "Unknown"}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(inv.expires_at).toLocaleDateString()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

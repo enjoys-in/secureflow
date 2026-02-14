@@ -58,6 +58,7 @@ func main() {
 	auditRepo := repository.NewAuditLogRepository(conn)
 	invRepo := repository.NewInvitationRepository(conn)
 	portRepo := repository.NewImmutablePortRepository(conn)
+	blockedIPRepo := repository.NewBlockedIPRepository(conn)
 
 	// Seed default immutable ports
 	if err := repository.SeedDefaultPorts(context.Background(), portRepo, constants.DefaultImmutablePorts, constants.ServicePortNames); err != nil {
@@ -126,6 +127,7 @@ func main() {
 		AuditLogRepo:      auditRepo,
 		InvitationRepo:    invRepo,
 		ImmutablePortRepo: portRepo,
+		BlockedIPRepo:     blockedIPRepo,
 	})
 
 	// Graceful shutdown

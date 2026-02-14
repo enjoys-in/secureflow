@@ -12,6 +12,7 @@ import (
 type FirewallRuleRepository interface {
 	Repository[db.FirewallRule]
 	FindBySecurityGroup(ctx context.Context, sgID string) ([]db.FirewallRule, error)
+	FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.FirewallRuleWithDetails, error)
 	DeleteNonImmutable(ctx context.Context, id string) error
 }
 
@@ -87,6 +88,39 @@ func (r *firewallRuleRepo) FindBySecurityGroup(ctx context.Context, sgID string)
 			return nil, err
 		}
 		rules = append(rules, *rule)
+	}
+	return rules, rows.Err()
+}
+
+func (r *firewallRuleRepo) FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.FirewallRuleWithDetails, error) {
+	query := `SELECT fr.id, fr.security_group_id, fr.direction, fr.protocol, fr.port, fr.port_range_end,
+		fr.source_cidr, fr.dest_cidr, fr.action, fr.description, fr.is_immutable, fr.created_by, fr.created_at,
+		COALESCE(sg.name, '') AS security_group_name,
+		COALESCE(u.name, '') AS created_by_name,
+		COALESCE(u.email, '') AS created_by_email
+		FROM firewall_rules fr
+		LEFT JOIN security_groups sg ON fr.security_group_id = sg.id
+		LEFT JOIN users u ON fr.created_by = u.id::text
+		ORDER BY fr.created_at DESC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := r.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rules []db.FirewallRuleWithDetails
+	for rows.Next() {
+		var rd db.FirewallRuleWithDetails
+		if err := rows.Scan(
+			&rd.ID, &rd.SecurityGroupID, &rd.Direction, &rd.Protocol, &rd.Port, &rd.PortRangeEnd,
+			&rd.SourceCIDR, &rd.DestCIDR, &rd.Action, &rd.Description, &rd.IsImmutable, &rd.CreatedBy, &rd.CreatedAt,
+			&rd.SecurityGroupName, &rd.CreatedByName, &rd.CreatedByEmail,
+		); err != nil {
+			return nil, err
+		}
+		rules = append(rules, rd)
 	}
 	return rules, rows.Err()
 }

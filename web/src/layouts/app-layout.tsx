@@ -15,6 +15,7 @@ import {
   Menu,
   ShieldCheck,
   ShieldBan,
+  Activity,
   Bell,
   Search,
 } from "lucide-react"
@@ -48,6 +49,7 @@ const navSections: NavSection[] = [
       { to: "/firewall-rules", label: "Firewall Rules", icon: Network },
       { to: "/immutable-ports", label: "Protected Ports", icon: Lock },
       { to: "/blocked-ips", label: "Blocked IPs", icon: ShieldBan },
+      { to: "/processes", label: "Processes", icon: Activity },
     ],
   },
   {

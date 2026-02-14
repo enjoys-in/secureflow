@@ -14,6 +14,7 @@ type InvitationRepository interface {
 	Create(ctx context.Context, inv *db.Invitation) error
 	FindByToken(ctx context.Context, token string) (*db.Invitation, error)
 	Accept(ctx context.Context, id string) error
+	FindPending(ctx context.Context, limit, offset int) ([]db.InvitationWithInviter, error)
 }
 
 type invitationRepo struct {
@@ -47,6 +48,32 @@ func (r *invitationRepo) FindByToken(ctx context.Context, token string) (*db.Inv
 func (r *invitationRepo) Accept(ctx context.Context, id string) error {
 	_, err := r.ExecContext(ctx, `UPDATE invitations SET accepted_at = NOW() WHERE id = $1`, id)
 	return err
+}
+
+func (r *invitationRepo) FindPending(ctx context.Context, limit, offset int) ([]db.InvitationWithInviter, error) {
+	query := `SELECT i.id, i.email, i.role, i.invited_by, i.expires_at, i.accepted_at, i.created_at,
+		COALESCE(u.name, '') AS inviter_name, COALESCE(u.email, '') AS inviter_email
+		FROM invitations i
+		LEFT JOIN users u ON i.invited_by = u.id
+		WHERE i.accepted_at IS NULL AND i.expires_at > NOW()
+		ORDER BY i.created_at DESC
+		LIMIT $1 OFFSET $2`
+
+	rows, err := r.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var invitations []db.InvitationWithInviter
+	for rows.Next() {
+		var inv db.InvitationWithInviter
+		if err := rows.Scan(&inv.ID, &inv.Email, &inv.Role, &inv.InvitedBy, &inv.ExpiresAt, &inv.AcceptedAt, &inv.CreatedAt, &inv.InviterName, &inv.InviterEmail); err != nil {
+			return nil, err
+		}
+		invitations = append(invitations, inv)
+	}
+	return invitations, rows.Err()
 }
 
 // --- Server Repository ---

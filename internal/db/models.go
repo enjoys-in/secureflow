@@ -33,6 +33,16 @@ type SecurityGroup struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// SecurityGroupWithDetails extends SecurityGroup with computed counts and creator info.
+type SecurityGroupWithDetails struct {
+	SecurityGroup
+	RuleCount      int    `json:"rule_count"`
+	InboundCount   int    `json:"inbound_count"`
+	OutboundCount  int    `json:"outbound_count"`
+	CreatedByName  string `json:"created_by_name"`
+	CreatedByEmail string `json:"created_by_email"`
+}
+
 // FirewallRule represents a single firewall rule.
 type FirewallRule struct {
 	ID              string    `json:"id"`
@@ -48,6 +58,14 @@ type FirewallRule struct {
 	IsImmutable     bool      `json:"is_immutable"`
 	CreatedBy       string    `json:"created_by"`
 	CreatedAt       time.Time `json:"created_at"`
+}
+
+// FirewallRuleWithDetails extends FirewallRule with security group and creator info.
+type FirewallRuleWithDetails struct {
+	FirewallRule
+	SecurityGroupName string `json:"security_group_name"`
+	CreatedByName     string `json:"created_by_name"`
+	CreatedByEmail    string `json:"created_by_email"`
 }
 
 // ServerSecurityGroup links a security group to a server.
@@ -88,6 +106,13 @@ type Invitation struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+// InvitationWithInviter extends Invitation with the inviter's details.
+type InvitationWithInviter struct {
+	Invitation
+	InviterName  string `json:"inviter_name"`
+	InviterEmail string `json:"inviter_email"`
+}
+
 // ImmutablePort represents a port that must always remain open.
 type ImmutablePort struct {
 	ID          string    `json:"id"`
@@ -97,4 +122,26 @@ type ImmutablePort struct {
 	IsDefault   bool      `json:"is_default"`
 	AddedBy     *string   `json:"added_by,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// BlockedIP represents a blocked IP address or CIDR range.
+type BlockedIP struct {
+	ID          string     `json:"id"`
+	IP          string     `json:"ip"`
+	Reason      string     `json:"reason"`
+	Status      string     `json:"status"` // "blocked" or "unblocked"
+	BlockedBy   string     `json:"blocked_by"`
+	UnblockedBy *string    `json:"unblocked_by,omitempty"`
+	BlockedAt   time.Time  `json:"blocked_at"`
+	UnblockedAt *time.Time `json:"unblocked_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// BlockedIPWithUser extends BlockedIP with user details.
+type BlockedIPWithUser struct {
+	BlockedIP
+	BlockedByName    string `json:"blocked_by_name"`
+	BlockedByEmail   string `json:"blocked_by_email"`
+	UnblockedByName  string `json:"unblocked_by_name,omitempty"`
+	UnblockedByEmail string `json:"unblocked_by_email,omitempty"`
 }

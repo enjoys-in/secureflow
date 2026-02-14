@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -112,6 +113,29 @@ func (h *FirewallHandler) AddRule(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "rule created",
 		"rule":    dbRule,
+	})
+}
+
+// ListAllRulesWithDetails returns all DB-stored rules with security group and creator info.
+func (h *FirewallHandler) ListAllRulesWithDetails(c *fiber.Ctx) error {
+	limit, _ := strconv.Atoi(c.Query("limit", "100"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	rules, err := h.ruleRepo.FindAllWithDetails(c.Context(), limit, offset)
+	if err != nil {
+		return constants.ErrDatabaseFailure.WithMessage("failed to fetch rules")
+	}
+
+	return c.JSON(fiber.Map{
+		"rules":  rules,
+		"limit":  limit,
+		"offset": offset,
 	})
 }
 
