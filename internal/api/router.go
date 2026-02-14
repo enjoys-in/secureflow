@@ -109,9 +109,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 
 	// Audit logs (viewer+)
 	logs := protected.Group("/logs")
-	logs.Get("/audit",
-		permMW.RequirePermission(constants.RelationCanView, constants.FGAObjectSystem),
-		logsH.ListAuditLogs)
+	logs.Get("/audit", permMW.RequirePermission(constants.RelationCanView, constants.FGAObjectSystem), logsH.ListAuditLogs)
 
 	// Immutable ports (admin only)
 	ports := protected.Group("/ports")
