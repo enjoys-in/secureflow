@@ -33,7 +33,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<WebSocketProvider><DashboardPage /></WebSocketProvider>} />
             <Route path="/security-groups" element={<SecurityGroupsPage />} />
             <Route path="/firewall-rules" element={<FirewallRulesPage />} />
             <Route path="/immutable-ports" element={<ImmutablePortsPage />} />

@@ -67,6 +67,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 	sysPortsH := handlers.NewSystemPortsHandler()
 	processH := handlers.NewProcessHandler()
 	blockedIPH := handlers.NewBlockedIPHandler(deps.BlockedIPRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
+	dashboardH := handlers.NewDashboardHandler(deps.DB)
 
 	// ---- Middleware ----
 	authMW := middleware.NewAuthMiddleware(deps.Auth)
@@ -125,6 +126,11 @@ func NewServer(deps ServerDeps) *fiber.App {
 	users.Get("/members", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.ListMembers)
 	users.Get("/invitations", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.ListInvitations)
 	users.Post("/invite", permMW.RequirePermission(constants.RelationCanAdmin, constants.FGAObjectSystem), userH.InviteUser)
+
+	// Dashboard analytics (viewer+)
+	dashboard := protected.Group("/dashboard")
+	dashboard.Get("/stats", dashboardH.GetStats)
+	dashboard.Get("/activity", dashboardH.GetRecentActivity)
 
 	// Audit logs (viewer+)
 	logs := protected.Group("/logs")

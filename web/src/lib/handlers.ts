@@ -424,6 +424,37 @@ export async function healthCheck(signal?: AbortSignal) {
     return data
 }
 
+// ---- Dashboard Analytics ----
+
+export interface DashboardStatsDTO {
+    security_groups: number
+    firewall_rules: number
+    immutable_ports: number
+    team_members: number
+    blocked_ips: number
+    inbound_rules: number
+    outbound_rules: number
+}
+
+export interface RecentActivityDTO {
+    id: string
+    user_name: string
+    action: string
+    resource: string
+    details: string
+    timestamp: string
+}
+
+export async function getDashboardStats(signal?: AbortSignal) {
+    const { data } = await api.get<{ stats: DashboardStatsDTO }>("/dashboard/stats", { signal })
+    return data.stats
+}
+
+export async function getDashboardRecentActivity(signal?: AbortSignal) {
+    const { data } = await api.get<{ recent_activity: RecentActivityDTO[] }>("/dashboard/activity", { signal })
+    return data.recent_activity
+}
+
 // ---- WebSocket ----
 
 export function connectWebSocket(): WebSocket {
