@@ -4,13 +4,19 @@ import (
 	"context"
 	"net"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/enjoys-in/secureflow/internal/websocket"
 	"github.com/enjoys-in/secureflow/pkg/logger"
 )
 
-// isInternalTraffic returns true if the traffic is loopback/link-local
-// and should be excluded from the dashboard feed.
+// maxEventsPerSecond caps how many traffic events are forwarded to WebSocket
+// clients per second to prevent browser tab overload.
+const maxEventsPerSecond = 20
+
+// isInternalTraffic returns true if the traffic is loopback, link-local,
+// same-host, or otherwise not real inbound/outbound traffic.
 func isInternalTraffic(srcIP, dstIP string) bool {
 	src := net.ParseIP(srcIP)
 	dst := net.ParseIP(dstIP)
@@ -30,12 +36,12 @@ func isInternalTraffic(srcIP, dstIP string) bool {
 	}
 
 	// Link-local (169.254.x.x, fe80::)
-	if src.IsLinkLocalUnicast() && dst.IsLinkLocalUnicast() {
+	if src.IsLinkLocalUnicast() || dst.IsLinkLocalUnicast() {
 		return true
 	}
 
 	// Multicast / broadcast
-	if dst.IsMulticast() || strings.HasSuffix(dstIP, ".255") {
+	if dst.IsMulticast() || dst.IsUnspecified() || strings.HasSuffix(dstIP, ".255") {
 		return true
 	}
 
@@ -43,12 +49,13 @@ func isInternalTraffic(srcIP, dstIP string) bool {
 }
 
 // Bridge connects the NFLOG traffic monitor to the WebSocket hub.
-// Every packet captured by the kernel is forwarded as a WebSocket Event
-// to all connected browser clients.
+// Every captured packet is forwarded as a WebSocket Event to all connected
+// browser clients, after filtering internal traffic and applying rate limiting.
 type Bridge struct {
 	monitor *NFLOGMonitor
 	hub     *websocket.Hub
 	logger  *logger.Logger
+	emitted atomic.Int64 // events emitted in the current window
 }
 
 // NewBridge creates a bridge between the traffic monitor and WebSocket hub.
@@ -63,9 +70,28 @@ func NewBridge(monitor *NFLOGMonitor, hub *websocket.Hub, log *logger.Logger) *B
 // Run wires the monitor callback to the hub and starts capturing.
 // It blocks until ctx is cancelled.
 func (b *Bridge) Run(ctx context.Context) error {
+	// Reset the rate-limit counter every second
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				b.emitted.Store(0)
+			}
+		}
+	}()
+
 	b.monitor.SetCallback(func(event TrafficEvent) {
-		// Skip internal/loopback traffic — only forward inbound & outbound
+		// 1) Skip internal/loopback traffic — only forward inbound & outbound
 		if isInternalTraffic(event.SrcIP, event.DstIP) {
+			return
+		}
+
+		// 2) Rate limit — drop excess events to prevent browser overload
+		if b.emitted.Add(1) > int64(maxEventsPerSecond) {
 			return
 		}
 
