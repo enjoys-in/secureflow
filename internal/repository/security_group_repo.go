@@ -26,7 +26,7 @@ func NewSecurityGroupRepository(conn *sql.DB) SecurityGroupRepository {
 	return &securityGroupRepo{BasePostgresRepo{DB: conn}}
 }
 
-var sgCols = `id, name, description, created_by, created_at, updated_at`
+var sgCols = `id, name, COALESCE(description, '') AS description, COALESCE(created_by::text, '') AS created_by, created_at, updated_at`
 
 func scanSecurityGroup(scanner interface{ Scan(...interface{}) error }) (*db.SecurityGroup, error) {
 	sg := &db.SecurityGroup{}
@@ -79,7 +79,8 @@ func (r *securityGroupRepo) Create(ctx context.Context, sg *db.SecurityGroup) er
 }
 
 func (r *securityGroupRepo) FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.SecurityGroupWithDetails, error) {
-	query := `SELECT sg.id, sg.name, sg.description, sg.created_by, sg.created_at, sg.updated_at,
+	query := `SELECT sg.id, sg.name, COALESCE(sg.description, '') AS description,
+		COALESCE(sg.created_by::text, '') AS created_by, sg.created_at, sg.updated_at,
 		COUNT(fr.id) AS rule_count,
 		COUNT(fr.id) FILTER (WHERE fr.direction = 'inbound') AS inbound_count,
 		COUNT(fr.id) FILTER (WHERE fr.direction = 'outbound') AS outbound_count,
@@ -87,7 +88,7 @@ func (r *securityGroupRepo) FindAllWithDetails(ctx context.Context, limit, offse
 		COALESCE(u.email, '') AS created_by_email
 		FROM security_groups sg
 		LEFT JOIN firewall_rules fr ON fr.security_group_id = sg.id
-		LEFT JOIN users u ON sg.created_by = u.id::text
+		LEFT JOIN users u ON sg.created_by = u.id
 		GROUP BY sg.id, sg.name, sg.description, sg.created_by, sg.created_at, sg.updated_at,
 			u.name, u.email
 		ORDER BY sg.created_at DESC

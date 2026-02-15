@@ -33,10 +33,10 @@ echo
 cat /tmp/register_response.json
 echo
 
-# if [[ "$http_code" -eq 200 || "$http_code" -eq 201 ]]; then
-#   echo "Registration successful! Cleaning up..."
-#   rm -f /tmp/register_response.json
-#   rm -- "$0"
-# else
-#   echo "Registration failed (HTTP $http_code)."
-# fi
+if [[ "$http_code" -eq 200 || "$http_code" -eq 201 ]]; then
+  echo "Registration successful! Cleaning up..."
+  rm -f /tmp/register_response.json
+  rm -- "$0"
+else
+  echo "Registration failed (HTTP $http_code)."
+fi

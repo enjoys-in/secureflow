@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "@/lib/consts"
 import {
   createContext,
   useContext,
@@ -39,7 +40,7 @@ interface WebSocketContextValue {
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null)
 
-const WS_BASE_URL = (import.meta.env.VITE_API_URL || "http://localhost:8443")
+const WS_BASE_URL = (API_BASE_URL || "http://localhost:8443")
   .replace(/\/api\/v1\/?$/, "")
   .replace(/^http/, "ws")
 

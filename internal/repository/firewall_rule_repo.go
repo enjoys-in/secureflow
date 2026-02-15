@@ -26,7 +26,7 @@ func NewFirewallRuleRepository(conn *sql.DB) FirewallRuleRepository {
 	return &firewallRuleRepo{BasePostgresRepo{DB: conn}}
 }
 
-var firewallRuleCols = `id, security_group_id, direction, protocol, port, port_range_end, source_cidr, dest_cidr, action, description, is_immutable, created_by, created_at`
+var firewallRuleCols = `id, COALESCE(security_group_id::text, '') AS security_group_id, direction, protocol, port, port_range_end, source_cidr, COALESCE(dest_cidr, '') AS dest_cidr, action, COALESCE(description, '') AS description, is_immutable, COALESCE(created_by::text, '') AS created_by, created_at`
 
 func scanFirewallRule(scanner interface{ Scan(...interface{}) error }) (*db.FirewallRule, error) {
 	r := &db.FirewallRule{}
@@ -93,14 +93,17 @@ func (r *firewallRuleRepo) FindBySecurityGroup(ctx context.Context, sgID string)
 }
 
 func (r *firewallRuleRepo) FindAllWithDetails(ctx context.Context, limit, offset int) ([]db.FirewallRuleWithDetails, error) {
-	query := `SELECT fr.id, fr.security_group_id, fr.direction, fr.protocol, fr.port, fr.port_range_end,
-		fr.source_cidr, fr.dest_cidr, fr.action, fr.description, fr.is_immutable, fr.created_by, fr.created_at,
+	query := `SELECT fr.id, COALESCE(fr.security_group_id::text, '') AS security_group_id,
+		fr.direction, fr.protocol, fr.port, fr.port_range_end,
+		fr.source_cidr, COALESCE(fr.dest_cidr, '') AS dest_cidr,
+		fr.action, COALESCE(fr.description, '') AS description,
+		fr.is_immutable, COALESCE(fr.created_by::text, '') AS created_by, fr.created_at,
 		COALESCE(sg.name, '') AS security_group_name,
 		COALESCE(u.name, '') AS created_by_name,
 		COALESCE(u.email, '') AS created_by_email
 		FROM firewall_rules fr
 		LEFT JOIN security_groups sg ON fr.security_group_id = sg.id
-		LEFT JOIN users u ON fr.created_by = u.id::text
+		LEFT JOIN users u ON fr.created_by = u.id
 		ORDER BY fr.created_at DESC
 		LIMIT $1 OFFSET $2`
 

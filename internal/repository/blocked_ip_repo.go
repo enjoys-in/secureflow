@@ -48,8 +48,8 @@ func (r *blockedIPRepo) FindAll(ctx context.Context, status string, limit, offse
 		       COALESCE(uu.name, '') AS unblocked_by_name,
 		       COALESCE(uu.email, '') AS unblocked_by_email
 		FROM blocked_ips b
-		LEFT JOIN users ub ON b.blocked_by = ub.id::text
-		LEFT JOIN users uu ON b.unblocked_by = uu.id::text
+		LEFT JOIN users ub ON b.blocked_by = ub.id
+		LEFT JOIN users uu ON b.unblocked_by = uu.id
 	`
 	args := []interface{}{}
 	paramIdx := 1
