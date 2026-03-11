@@ -207,6 +207,28 @@ func (h *BlockedIPHandler) ReblockIP(c *fiber.Ctx) error {
 		return constants.ErrDatabaseFailure.WithMessage("failed to re-block IP")
 	}
 
+	// re-apply the firewall DROP rule for the re-blocked IP
+	// look up the IP from DB to get the actual address
+	// (Reblock already updated status; we need to find the entry)
+	entries, _ := h.repo.FindAll(c.Context(), "blocked", 200, 0)
+	for _, entry := range entries {
+		if entry.ID == id {
+			ip := entry.IP
+			cidr := ip
+			if !strings.Contains(cidr, "/") {
+				cidr = ip + "/32"
+			}
+			rule := fwPkg.Rule{
+				Direction:  "inbound",
+				Protocol:   "all",
+				SourceCIDR: cidr,
+				Action:     constants.ActionDrop,
+			}
+			_ = h.fw.AddRule(rule)
+			break
+		}
+	}
+
 	userID, _ := c.Locals("user_id").(string)
 	_ = h.auditRepo.Create(c.Context(), &db.AuditLog{
 		UserID:   userID,

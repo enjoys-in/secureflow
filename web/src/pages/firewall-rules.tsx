@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Table,
   TableBody,
@@ -25,6 +27,24 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Search,
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -34,12 +54,22 @@ import {
   Loader2,
   Wifi,
   Shield,
+  Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react"
+import { toast } from "sonner"
 import {
   listAllRulesWithDetails,
   listListeningPorts,
+  listSecurityGroups,
+  addFirewallRule,
+  updateFirewallRule,
+  deleteFirewallRule,
   type FirewallRuleWithDetailsDTO,
   type ListeningPortDTO,
+  type SecurityGroupDTO,
+  type AddRulePayload,
 } from "@/lib/handlers"
 
 // Well-known port names
@@ -57,6 +87,18 @@ function getPortName(port: number, process?: string): string {
   return KNOWN_PORTS[port] || `Port ${port}`
 }
 
+const emptyForm: AddRulePayload = {
+  direction: "inbound",
+  protocol: "tcp",
+  port: 0,
+  port_range_end: 0,
+  source_cidr: "0.0.0.0/0",
+  dest_cidr: "",
+  action: "ACCEPT",
+  description: "",
+  security_group_id: "",
+}
+
 export default function FirewallRulesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [directionFilter, setDirectionFilter] = useState("all")
@@ -71,6 +113,19 @@ export default function FirewallRulesPage() {
   const [listeningPorts, setListeningPorts] = useState<ListeningPortDTO[]>([])
   const [portsLoading, setPortsLoading] = useState(true)
   const [osName, setOsName] = useState("")
+
+  // Security groups (for form dropdown)
+  const [securityGroups, setSecurityGroups] = useState<SecurityGroupDTO[]>([])
+
+  // CRUD dialog state
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingRule, setEditingRule] = useState<FirewallRuleWithDetailsDTO | null>(null)
+  const [form, setForm] = useState<AddRulePayload>({ ...emptyForm })
+  const [saving, setSaving] = useState(false)
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<FirewallRuleWithDetailsDTO | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   const fetchRules = useCallback(async (signal?: AbortSignal) => {
     setRulesLoading(true)
@@ -105,12 +160,76 @@ export default function FirewallRulesPage() {
     const ac = new AbortController()
     fetchRules(ac.signal)
     fetchPorts(ac.signal)
+    listSecurityGroups(ac.signal).then(setSecurityGroups).catch(() => {})
     return () => ac.abort()
   }, [fetchRules, fetchPorts])
 
   const handleRefresh = () => {
     fetchRules()
     fetchPorts()
+  }
+
+  // ---- CRUD handlers ----
+  const openAddDialog = () => {
+    setEditingRule(null)
+    setForm({ ...emptyForm })
+    setDialogOpen(true)
+  }
+
+  const openEditDialog = (rule: FirewallRuleWithDetailsDTO) => {
+    setEditingRule(rule)
+    setForm({
+      direction: rule.direction as "inbound" | "outbound",
+      protocol: rule.protocol,
+      port: rule.port,
+      port_range_end: rule.port_range_end ?? 0,
+      source_cidr: rule.source_cidr,
+      dest_cidr: rule.dest_cidr ?? "",
+      action: rule.action,
+      description: rule.description ?? "",
+      security_group_id: rule.security_group_id ?? "",
+    })
+    setDialogOpen(true)
+  }
+
+  const handleSave = async () => {
+    if (!form.port || form.port < 1 || form.port > 65535) {
+      toast.error("Port must be between 1 and 65535")
+      return
+    }
+    setSaving(true)
+    try {
+      if (editingRule) {
+        await updateFirewallRule(editingRule.id, form)
+        toast.success("Rule updated")
+      } else {
+        await addFirewallRule(form)
+        toast.success("Rule created")
+      }
+      setDialogOpen(false)
+      fetchRules()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to save rule"
+      toast.error(msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteFirewallRule(deleteTarget.id)
+      toast.success("Rule deleted")
+      setDeleteTarget(null)
+      fetchRules()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to delete rule"
+      toast.error(msg)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // Filter rules
@@ -147,13 +266,19 @@ export default function FirewallRulesPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Firewall Rules</h1>
           <p className="text-[13px] text-muted-foreground">
-            View firewall rules and system listening ports
+            Manage firewall rules and view system listening ports
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Refresh
+          </Button>
+          <Button size="sm" onClick={openAddDialog}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Rule
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -245,6 +370,7 @@ export default function FirewallRulesPage() {
                       <TableHead>Action</TableHead>
                       <TableHead>Security Group</TableHead>
                       <TableHead>Created By</TableHead>
+                      <TableHead className="w-[100px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -298,6 +424,28 @@ export default function FirewallRulesPage() {
                               <p className="text-xs text-muted-foreground">{rule.created_by_email}</p>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {!rule.is_immutable && (
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openEditDialog(rule)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(rule)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -366,6 +514,187 @@ export default function FirewallRulesPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Add / Edit Rule Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{editingRule ? "Edit Rule" : "Add Rule"}</DialogTitle>
+            <DialogDescription>
+              {editingRule
+                ? "Update the firewall rule settings below."
+                : "Configure a new firewall rule."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="direction">Direction</Label>
+                <Select
+                  value={form.direction}
+                  onValueChange={(v) => setForm({ ...form, direction: v as "inbound" | "outbound" })}
+                >
+                  <SelectTrigger id="direction">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="inbound">Inbound</SelectItem>
+                    <SelectItem value="outbound">Outbound</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="protocol">Protocol</Label>
+                <Select
+                  value={form.protocol}
+                  onValueChange={(v) => setForm({ ...form, protocol: v })}
+                >
+                  <SelectTrigger id="protocol">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tcp">TCP</SelectItem>
+                    <SelectItem value="udp">UDP</SelectItem>
+                    <SelectItem value="icmp">ICMP</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="port">Port</Label>
+                <Input
+                  id="port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.port || ""}
+                  onChange={(e) => setForm({ ...form, port: parseInt(e.target.value) || 0 })}
+                  placeholder="e.g. 443"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="port_range_end">Port Range End</Label>
+                <Input
+                  id="port_range_end"
+                  type="number"
+                  min={0}
+                  max={65535}
+                  value={form.port_range_end || ""}
+                  onChange={(e) => setForm({ ...form, port_range_end: parseInt(e.target.value) || 0 })}
+                  placeholder="0 = single port"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="source_cidr">Source CIDR</Label>
+                <Input
+                  id="source_cidr"
+                  value={form.source_cidr}
+                  onChange={(e) => setForm({ ...form, source_cidr: e.target.value })}
+                  placeholder="0.0.0.0/0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dest_cidr">Dest CIDR</Label>
+                <Input
+                  id="dest_cidr"
+                  value={form.dest_cidr || ""}
+                  onChange={(e) => setForm({ ...form, dest_cidr: e.target.value })}
+                  placeholder="optional"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="action">Action</Label>
+                <Select
+                  value={form.action}
+                  onValueChange={(v) => setForm({ ...form, action: v })}
+                >
+                  <SelectTrigger id="action">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ACCEPT">Accept</SelectItem>
+                    <SelectItem value="DROP">Drop</SelectItem>
+                    <SelectItem value="REJECT">Reject</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="security_group">Security Group</Label>
+                <Select
+                  value={form.security_group_id || "none"}
+                  onValueChange={(v) => setForm({ ...form, security_group_id: v === "none" ? "" : v })}
+                >
+                  <SelectTrigger id="security_group">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {securityGroups.map((sg) => (
+                      <SelectItem key={sg.id} value={sg.id}>
+                        {sg.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={form.description || ""}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="Optional description"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              {editingRule ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rule</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this firewall rule? This will remove it from both the
+              database and the active firewall. This action cannot be undone.
+              {deleteTarget && (
+                <span className="block mt-2 font-mono text-xs">
+                  {deleteTarget.protocol.toUpperCase()} port {deleteTarget.port} — {deleteTarget.action} ({deleteTarget.direction})
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

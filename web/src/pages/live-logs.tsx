@@ -56,7 +56,7 @@ function wsEventToLog(event: WSEvent, id: number): LogEntry | null {
     protocol: (event.protocol || "TCP").toUpperCase(),
     port: event.port || 0,
     action: (event.action as "ACCEPT" | "DROP" | "REJECT") || "ACCEPT",
-    direction: event.type === "traffic" ? "IN" : "IN",
+    direction: (event.message === "OUT" ? "OUT" : "IN") as "IN" | "OUT",
     ruleId: event.rule_id || "—",
     bytes: 0,
   }

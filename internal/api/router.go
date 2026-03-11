@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -58,7 +59,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 
 	// ---- Handlers ----
 	healthH := handlers.NewHealthHandler(deps.DB)
-	authH := handlers.NewAuthHandler(deps.Auth, deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.FGA)
+	authH := handlers.NewAuthHandler(deps.Auth, deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.FGA, deps.Config.TLSEnabled)
 	firewallH := handlers.NewFirewallHandler(deps.FirewallRuleRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
 	profileH := handlers.NewProfileHandler(deps.SecurityGroupRepo, deps.FirewallRuleRepo, deps.AuditLogRepo, deps.Firewall, deps.Hub)
 	userH := handlers.NewUserHandler(deps.UserRepo, deps.InvitationRepo, deps.AuditLogRepo, deps.Auth, deps.FGA)
@@ -72,6 +73,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// ---- Middleware ----
 	authMW := middleware.NewAuthMiddleware(deps.Auth)
 	permMW := middleware.NewPermissionMiddleware(deps.Auth)
+	authRateLimiter := middleware.NewRateLimiter(10, 1*time.Minute)
 
 	// ---- Routes ----
 	v1 := app.Group("/api/v1")
@@ -79,11 +81,12 @@ func NewServer(deps ServerDeps) *fiber.App {
 	// Health (public)
 	v1.Get("/health", healthH.HealthCheck)
 
-	// Auth (public)
-	auth := v1.Group("/auth")
+	// Auth (public, rate-limited)
+	auth := v1.Group("/auth", authRateLimiter.Limit())
 	auth.Post("/register", authH.Register)
 	auth.Post("/register-admin", authH.RegisterAdmin)
 	auth.Post("/login", authH.Login)
+	auth.Post("/logout", authH.Logout)
 	auth.Post("/accept-invite", authH.AcceptInvite)
 
 	// Protected routes
@@ -94,6 +97,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 	rules.Get("/", firewallH.ListRules)
 	rules.Get("/all", firewallH.ListAllRulesWithDetails)
 	rules.Post("/", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), firewallH.AddRule)
+	rules.Put("/:id", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), firewallH.UpdateRule)
 	rules.Delete("/:id", permMW.RequirePermission(constants.RelationCanEdit, constants.FGAObjectFirewall), firewallH.DeleteRule)
 
 	// System info

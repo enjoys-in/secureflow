@@ -15,11 +15,13 @@ import BlockedIpsPage from "@/pages/blocked-ips"
 import ProcessesPage from "@/pages/processes"
 import SettingsPage from "@/pages/settings"
 import { WebSocketProvider } from "./contexts/websocket-context"
+import { Toaster } from "@/components/ui/sonner"
 
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster richColors position="top-right" />
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />

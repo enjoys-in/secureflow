@@ -143,7 +143,7 @@ func (h *Hub) EmitError(message, user string) {
 }
 
 // EmitTraffic publishes a traffic event.
-func (h *Hub) EmitTraffic(srcIP, dstIP, protocol, action string, port int) {
+func (h *Hub) EmitTraffic(srcIP, dstIP, protocol, action, direction string, port int) {
 	h.Emit(Event{
 		Type:     constants.EventTypeTraffic,
 		SrcIP:    srcIP,
@@ -151,6 +151,7 @@ func (h *Hub) EmitTraffic(srcIP, dstIP, protocol, action string, port int) {
 		Protocol: protocol,
 		Action:   action,
 		Port:     port,
+		Message:  direction,
 	})
 }
 

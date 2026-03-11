@@ -310,6 +310,11 @@ export async function addFirewallRule(payload: AddRulePayload, signal?: AbortSig
     return data
 }
 
+export async function updateFirewallRule(ruleId: string, payload: AddRulePayload, signal?: AbortSignal) {
+    const { data } = await api.put<{ message: string; rule: FirewallRuleDTO }>(`/rules/${ruleId}`, payload, { signal })
+    return data
+}
+
 export async function deleteFirewallRule(ruleId: string, signal?: AbortSignal) {
     const { data } = await api.delete<{ message: string }>(`/rules/${ruleId}`, { signal })
     return data
@@ -409,7 +414,7 @@ export async function listInvitations(params?: { limit?: number; offset?: number
 
 // ---- Audit Logs ----
 
-export async function getAuditLogs(params?: { limit?: number; offset?: number }, signal?: AbortSignal) {
+export async function getAuditLogs(params?: { limit?: number; offset?: number; exclude_internal?: string; action?: string }, signal?: AbortSignal) {
     const { data } = await api.get<{ audit_logs: AuditLogDTO[]; limit: number; offset: number }>("/logs/audit", {
         params,
         signal,

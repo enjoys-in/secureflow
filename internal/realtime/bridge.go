@@ -95,11 +95,18 @@ func (b *Bridge) Run(ctx context.Context) error {
 			return
 		}
 
+		// 3) Determine direction from NFLOG prefix
+		direction := "IN"
+		if strings.Contains(strings.ToUpper(event.Prefix), "OUTPUT") {
+			direction = "OUT"
+		}
+
 		b.hub.EmitTraffic(
 			event.SrcIP,
 			event.DstIP,
 			event.Protocol,
 			event.Action,
+			direction,
 			event.DstPort,
 		)
 	})

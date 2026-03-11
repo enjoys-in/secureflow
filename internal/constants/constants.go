@@ -52,6 +52,7 @@ const (
 // --- Audit Actions ---
 const (
 	AuditActionAddRule             = "add_rule"
+	AuditActionUpdateRule          = "update_rule"
 	AuditActionDeleteRule          = "delete_rule"
 	AuditActionCreateSecurityGroup = "create_security_group"
 	AuditActionUpdateSecurityGroup = "update_security_group"

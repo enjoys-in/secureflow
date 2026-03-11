@@ -139,6 +139,87 @@ func (h *FirewallHandler) ListAllRulesWithDetails(c *fiber.Ctx) error {
 	})
 }
 
+// UpdateRule updates an existing firewall rule.
+func (h *FirewallHandler) UpdateRule(c *fiber.Ctx) error {
+	ruleID := c.Params("id")
+
+	existing, err := h.ruleRepo.FindByID(c.Context(), ruleID)
+	if err != nil {
+		return constants.ErrRuleNotFound
+	}
+
+	if existing.IsImmutable {
+		return constants.ErrImmutableRule
+	}
+
+	var req AddRuleRequest
+	if err := c.BodyParser(&req); err != nil {
+		return constants.ErrInvalidRequestBody
+	}
+
+	newRule := fwPkg.Rule{
+		ID:         ruleID,
+		Direction:  strings.ToLower(req.Direction),
+		Protocol:   strings.ToLower(req.Protocol),
+		Port:       req.Port,
+		PortEnd:    req.PortRangeEnd,
+		SourceCIDR: req.SourceCIDR,
+		DestCIDR:   req.DestCIDR,
+		Action:     strings.ToUpper(req.Action),
+	}
+
+	if err := fwPkg.ValidateRule(newRule); err != nil {
+		return constants.ErrInvalidRequestBody.WithMessage(err.Error())
+	}
+
+	if h.fw.IsPortImmutable(req.Port) && strings.ToUpper(req.Action) != constants.ActionAccept {
+		return constants.ErrImmutablePort
+	}
+
+	// Remove old firewall rule, then add updated one
+	_ = h.fw.DeleteRule(ruleID)
+	if err := h.fw.AddRule(newRule); err != nil {
+		userID, _ := c.Locals("user_id").(string)
+		h.hub.EmitError(err.Error(), userID)
+		return constants.ErrFirewallFailure.Wrap(err)
+	}
+
+	updates := map[string]interface{}{
+		"direction":      newRule.Direction,
+		"protocol":       newRule.Protocol,
+		"port":           newRule.Port,
+		"port_range_end": newRule.PortEnd,
+		"source_cidr":    req.SourceCIDR,
+		"dest_cidr":      req.DestCIDR,
+		"action":         newRule.Action,
+		"description":    req.Description,
+	}
+	if req.SecurityGroupID != "" {
+		updates["security_group_id"] = req.SecurityGroupID
+	}
+
+	updated, err := h.ruleRepo.FindByIDAndUpdate(c.Context(), ruleID, updates)
+	if err != nil {
+		return constants.ErrDatabaseFailure.WithMessage("rule updated in firewall but failed to persist to database")
+	}
+
+	userID, _ := c.Locals("user_id").(string)
+	_ = h.auditRepo.Create(c.Context(), &db.AuditLog{
+		UserID:   userID,
+		Action:   constants.AuditActionUpdateRule,
+		Resource: "firewall_rule:" + ruleID,
+		Details:  fmt.Sprintf("Updated rule: port=%d protocol=%s action=%s", newRule.Port, newRule.Protocol, newRule.Action),
+		IP:       c.IP(),
+	})
+
+	h.hub.EmitRuleChange("updated", ruleID, userID, newRule.Port)
+
+	return c.JSON(fiber.Map{
+		"message": "rule updated",
+		"rule":    updated,
+	})
+}
+
 // DeleteRule removes a firewall rule.
 func (h *FirewallHandler) DeleteRule(c *fiber.Ctx) error {
 	ruleID := c.Params("id")

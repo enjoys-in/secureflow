@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import { logActivity } from "@/types"
 import {
   TableBody,
@@ -68,6 +70,7 @@ const PAGE_SIZE = 25
 export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [actionFilter, setActionFilter] = useState("all")
+  const [excludeInternal, setExcludeInternal] = useState(true)
   const [logs, setLogs] = useState<AuditLogDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
@@ -76,7 +79,11 @@ export default function AuditLogsPage() {
   const fetchLogs = useCallback(async (currentOffset: number) => {
     setLoading(true)
     try {
-      const data = await getAuditLogs({ limit: PAGE_SIZE, offset: currentOffset })
+      const data = await getAuditLogs({
+        limit: PAGE_SIZE,
+        offset: currentOffset,
+        exclude_internal: excludeInternal ? "true" : "false",
+      })
       setLogs(data.audit_logs ?? [])
       setHasMore((data.audit_logs?.length ?? 0) >= PAGE_SIZE)
     } catch (err) {
@@ -85,7 +92,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [excludeInternal])
 
   useEffect(() => {
     logActivity({ timestamp: new Date().toISOString(), page: "AuditLogs", action: "PAGE_VIEW" })
@@ -155,6 +162,19 @@ export default function AuditLogsPage() {
                 <SelectItem value="apply">Applied</SelectItem>
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2 ml-auto">
+              <Switch
+                id="exclude-internal"
+                checked={excludeInternal}
+                onCheckedChange={(checked) => {
+                  setExcludeInternal(checked)
+                  setOffset(0)
+                }}
+              />
+              <Label htmlFor="exclude-internal" className="text-sm whitespace-nowrap">
+                Traffic only
+              </Label>
+            </div>
             <div className="text-sm text-muted-foreground">
               Showing {filteredLogs.length} entries
             </div>
