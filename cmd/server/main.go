@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// Initialize auth service (uses repos + FGA)
-	authService := security.NewAuthService(cfg.JWTSecret, userRepo, fgaClient)
+	authService := security.NewAuthService(cfg.JWTSecret, cfg.MasterPassword, userRepo, fgaClient)
 
 	// Initialize firewall manager with DB-driven immutable ports
 	fwManager, err := firewall.NewManager(cfg.FirewallBackend, allPorts, appLogger)

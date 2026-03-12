@@ -26,7 +26,8 @@ type Config struct {
 	OpenFGAStoreID  string `yaml:"openfga_store_id"`
 
 	// Auth
-	JWTSecret string `yaml:"jwt_secret"`
+	JWTSecret      string `yaml:"jwt_secret"`
+	MasterPassword string `yaml:"master_password"`
 
 	// Firewall
 	FirewallBackend string `yaml:"firewall_backend"` // "iptables" or "nftables"
@@ -55,6 +56,7 @@ func Load() (*Config, error) {
 		OpenFGAEndpoint: getEnv("OPENFGA_ENDPOINT", "http://localhost:8080"),
 		OpenFGAStoreID:  getEnv("OPENFGA_STORE_ID", ""),
 		JWTSecret:       getEnv("JWT_SECRET", "change-me-in-production"),
+		MasterPassword:  getEnv("MASTER_PASSWORD", ""),
 		FirewallBackend: getEnv("FIREWALL_BACKEND", "iptables"),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 		LogFormat:       getEnv("LOG_FORMAT", "json"),

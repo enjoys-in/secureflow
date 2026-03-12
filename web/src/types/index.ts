@@ -4,9 +4,6 @@ export interface LoginPayload {
   password: string
 }
 
-export interface ForgotPasswordPayload {
-  email: string
-}
 
 // ---- User / Member ----
 export type UserRole = "admin" | "editor" | "viewer"

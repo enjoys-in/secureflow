@@ -3,7 +3,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import AppLayout from "@/layouts/app-layout"
 import LoginPage from "@/pages/auth/login"
-import ForgotPasswordPage from "@/pages/auth/forgot-password"
+
 import DashboardPage from "@/pages/dashboard"
 import SecurityGroupsPage from "@/pages/security-groups"
 import FirewallRulesPage from "@/pages/firewall-rules"
@@ -25,7 +25,7 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
 
           {/* Protected routes — require authentication */}
           <Route

