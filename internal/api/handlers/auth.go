@@ -188,6 +188,39 @@ func (h *AuthHandler) RegisterAdmin(c *fiber.Ctx) error {
 	})
 }
 
+type ResetPasswordRequest struct {
+	Email       string `json:"email"`
+	NewPassword string `json:"new_password"`
+}
+
+func (h *AuthHandler) ResetPassword(c *fiber.Ctx) error {
+	var req ResetPasswordRequest
+	if err := c.BodyParser(&req); err != nil {
+		return constants.ErrInvalidRequestBody
+	}
+
+	if req.Email == "" || req.NewPassword == "" {
+		return constants.ErrMissingRequiredFields
+	}
+
+	if err := h.auth.ResetPassword(c.Context(), req.Email, req.NewPassword); err != nil {
+		return err
+	}
+
+	user, _ := h.userRepo.FindByEmail(c.Context(), req.Email)
+	if user != nil {
+		_ = h.auditRepo.Create(c.Context(), &db.AuditLog{
+			UserID:   user.ID,
+			Action:   constants.AuditActionResetPassword,
+			Resource: "user:" + user.ID,
+			Details:  "password reset",
+			IP:       c.IP(),
+		})
+	}
+
+	return c.JSON(fiber.Map{"message": "password updated successfully"})
+}
+
 // setAuthCookie sets the JWT token as an HTTP-only cookie.
 func (h *AuthHandler) setAuthCookie(c *fiber.Ctx, token string) {
 	sameSite := "Lax"

@@ -176,7 +176,6 @@ func (h *UserHandler) ListMembers(c *fiber.Ctx) error {
 	})
 }
 
-// ListInvitations returns all pending invitations.
 func (h *UserHandler) ListInvitations(c *fiber.Ctx) error {
 	limit, _ := strconv.Atoi(c.Query("limit", strconv.Itoa(constants.DefaultPageLimit)))
 	offset, _ := strconv.Atoi(c.Query("offset", "0"))

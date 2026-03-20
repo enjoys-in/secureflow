@@ -131,7 +131,7 @@ func (r *firewallRuleRepo) FindAllWithDetails(ctx context.Context, limit, offset
 func (r *firewallRuleRepo) Create(ctx context.Context, rule *db.FirewallRule) error {
 	return r.QueryRowContext(ctx,
 		`INSERT INTO firewall_rules (security_group_id, direction, protocol, port, port_range_end, source_cidr, dest_cidr, action, description, is_immutable, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, created_at`,
+		 VALUES (NULLIF($1, '')::uuid,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF($11, '')::uuid) RETURNING id, created_at`,
 		rule.SecurityGroupID, rule.Direction, rule.Protocol, rule.Port, rule.PortRangeEnd,
 		rule.SourceCIDR, rule.DestCIDR, rule.Action, rule.Description, rule.IsImmutable, rule.CreatedBy,
 	).Scan(&rule.ID, &rule.CreatedAt)

@@ -70,3 +70,8 @@ func (b *NFTablesBackend) SetupNFLOG(group uint16) error {
 	b.logger.Info("nftables-stub: NFLOG setup skipped (non-Linux)", "group", group)
 	return nil
 }
+
+func (b *NFTablesBackend) ImportExistingRules() ([]Rule, error) {
+	b.logger.Info("nftables-stub: import existing rules skipped (non-Linux)")
+	return nil, nil
+}

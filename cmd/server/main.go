@@ -94,6 +94,55 @@ func main() {
 	}
 	appLogger.Info("Immutable ports enforced", "count", len(allPorts))
 
+	// Import pre-existing kernel rules (e.g., iptables rules added before this server)
+	importedRules, err := fwManager.ImportExistingRules()
+	if err != nil {
+		appLogger.Error("Failed to import existing kernel rules", "error", err)
+	} else if len(importedRules) > 0 {
+		appLogger.Info("Importing pre-existing kernel rules", "count", len(importedRules))
+		for _, rule := range importedRules {
+			dbRule := &db.FirewallRule{
+				Direction:    rule.Direction,
+				Protocol:     rule.Protocol,
+				Port:         rule.Port,
+				PortRangeEnd: rule.PortEnd,
+				SourceCIDR:   rule.SourceCIDR,
+				DestCIDR:     rule.DestCIDR,
+				Action:       rule.Action,
+				Description:  "Imported from existing kernel rules",
+				IsImmutable:  false,
+			}
+			if err := ruleRepo.Create(context.Background(), dbRule); err != nil {
+				appLogger.Warn("Failed to save imported rule to database", "error", err)
+			}
+		}
+		appLogger.Info("Pre-existing rules imported to database", "count", len(importedRules))
+	}
+
+	// Sync all DB rules to the firewall kernel (restores rules after server restart)
+	allDBRules, err := ruleRepo.FindAll(context.Background(), nil, 10000, 0)
+	if err != nil {
+		appLogger.Error("Failed to load rules from database for sync", "error", err)
+	} else if len(allDBRules) > 0 {
+		var fwRules []firewall.Rule
+		for _, r := range allDBRules {
+			fwRules = append(fwRules, firewall.Rule{
+				ID:         r.ID,
+				Direction:  r.Direction,
+				Protocol:   r.Protocol,
+				Port:       r.Port,
+				PortEnd:    r.PortRangeEnd,
+				SourceCIDR: r.SourceCIDR,
+				DestCIDR:   r.DestCIDR,
+				Action:     r.Action,
+			})
+		}
+		if err := fwManager.SyncDBRules(fwRules); err != nil {
+			appLogger.Error("Failed to sync DB rules to firewall", "error", err)
+		}
+		appLogger.Info("Firewall rules synced from database", "count", len(fwRules))
+	}
+
 	// Initialize WebSocket hub
 	hub := websocket.NewHub(appLogger)
 	go hub.Run()

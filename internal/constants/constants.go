@@ -62,6 +62,7 @@ const (
 	AuditActionAcceptInvite        = "accept_invite"
 	AuditActionRegister            = "register"
 	AuditActionLogin               = "login"
+	AuditActionResetPassword       = "reset_password"
 	AuditActionAddImmutablePort    = "add_immutable_port"
 	AuditActionDeleteImmutablePort = "delete_immutable_port"
 )

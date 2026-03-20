@@ -40,6 +40,11 @@ type Backend interface {
 	// SetupNFLOG installs NFLOG rules so the kernel sends packet metadata
 	// to userspace (NFLOG group 100) for live traffic monitoring.
 	SetupNFLOG(group uint16) error
+	// ImportExistingRules reads pre-existing rules from the kernel's main
+	// chains (INPUT/OUTPUT), removes them from those chains, and returns
+	// them so the caller can persist them to the database. It also
+	// re-registers rules left in the managed chains from a previous run.
+	ImportExistingRules() ([]Rule, error)
 }
 
 // Manager is the concrete implementation with concurrency safety.
@@ -230,6 +235,40 @@ func (m *Manager) RemoveImmutablePort(port int) {
 	}
 	m.immutablePorts = filtered
 	m.logger.Info("Immutable port removed from runtime list", "port", port)
+}
+
+// ImportExistingRules discovers pre-existing rules in the kernel and returns
+// them. The rules are removed from the main chains so the caller can persist
+// them and later re-apply via SyncDBRules with proper database IDs.
+func (m *Manager) ImportExistingRules() ([]Rule, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.backend.ImportExistingRules()
+}
+
+// SyncDBRules applies all database-persisted rules to the firewall kernel.
+// This is called on startup to restore rules after a server restart.
+func (m *Manager) SyncDBRules(rules []Rule) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var synced, skipped int
+	for _, rule := range rules {
+		if err := m.backend.AddRule(rule); err != nil {
+			m.logger.Warn("Skipping rule sync", "rule_id", rule.ID, "error", err)
+			skipped++
+			continue
+		}
+		synced++
+	}
+
+	// Re-ensure immutable ports after sync
+	for _, port := range m.immutablePorts {
+		_ = m.backend.EnsurePort(port, "tcp", "ACCEPT")
+	}
+
+	m.logger.Info("DB rules synced to firewall", "synced", synced, "skipped", skipped)
+	return nil
 }
 
 // SetupTrafficMonitoring installs NFLOG rules in the kernel so that

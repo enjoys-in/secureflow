@@ -143,7 +143,30 @@ func (a *AuthService) Login(ctx context.Context, email, password string) (*db.Us
 	return user, token, nil
 }
 
-// GenerateInviteToken creates a secure random token for invitations.
+// ResetPassword resets a user's password by email (for forgotten password scenarios).
+func (a *AuthService) ResetPassword(ctx context.Context, email, newPassword string) error {
+	user, err := a.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return constants.ErrUserNotFound
+	}
+
+	if len(newPassword) < constants.MinPasswordLength {
+		return constants.ErrPasswordTooShort
+	}
+
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		return constants.ErrInternal.Wrap(err)
+	}
+
+	_, err = a.userRepo.FindByIDAndUpdate(ctx, user.ID, map[string]interface{}{"password_hash": hash})
+	if err != nil {
+		return constants.ErrDatabaseFailure.Wrap(err)
+	}
+
+	return nil
+}
+
 func GenerateInviteToken() (string, error) {
 	b := make([]byte, constants.InviteTokenBytes)
 	if _, err := rand.Read(b); err != nil {

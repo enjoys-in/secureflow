@@ -469,5 +469,12 @@ func (b *NFTablesBackend) SetupNFLOG(group uint16) error {
 	return nil
 }
 
+// ImportExistingRules is a no-op for nftables because the managed table is
+// deleted and recreated on every startup, so there are no leftover rules.
+func (b *NFTablesBackend) ImportExistingRules() ([]Rule, error) {
+	b.logger.Info("nftables: import existing rules (table is clean on startup)")
+	return nil, nil
+}
+
 // Ensure compile-time interface compliance.
 var _ Backend = (*NFTablesBackend)(nil)

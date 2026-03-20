@@ -87,6 +87,7 @@ func NewServer(deps ServerDeps) *fiber.App {
 	auth.Post("/register-admin", authH.RegisterAdmin)
 	auth.Post("/login", authH.Login)
 	auth.Post("/logout", authH.Logout)
+	auth.Post("/reset-password", authH.ResetPassword)
 	auth.Post("/accept-invite", authH.AcceptInvite)
 
 	// Protected routes

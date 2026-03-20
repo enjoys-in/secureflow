@@ -5,6 +5,7 @@ package firewall
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/coreos/go-iptables/iptables"
 
@@ -252,4 +253,232 @@ func (b *IPTablesBackend) SetupNFLOG(group uint16) error {
 	}
 
 	return nil
+}
+
+// ImportExistingRules reads pre-existing rules from INPUT/OUTPUT chains,
+// removes them from those chains so they can be re-added to the managed
+// chains with proper database IDs, and also re-registers any managed
+// rules left in FM_INPUT/FM_OUTPUT from a previous server run.
+func (b *IPTablesBackend) ImportExistingRules() ([]Rule, error) {
+	// Re-register rules left in managed chains from a previous run
+	b.recoverManagedRules()
+
+	// Import from main chains
+	var imported []Rule
+
+	for _, info := range []struct {
+		chain     string
+		direction string
+	}{
+		{"INPUT", "inbound"},
+		{"OUTPUT", "outbound"},
+	} {
+		lines, err := b.ipt.List(iptFilterTable, info.chain)
+		if err != nil {
+			b.logger.Warn("iptables: failed to list chain for import", "chain", info.chain, "error", err)
+			continue
+		}
+
+		for _, line := range lines {
+			if !strings.HasPrefix(line, "-A") {
+				continue
+			}
+
+			parts := strings.Fields(line)
+			if len(parts) < 4 {
+				continue
+			}
+
+			// spec = everything after "-A CHAIN"
+			spec := parts[2:]
+
+			if shouldSkipImport(spec) {
+				continue
+			}
+
+			rule := parseIPTablesLine(spec, info.direction)
+			if rule == nil || !isImportableAction(rule.Action) {
+				continue
+			}
+
+			// Clear ID so caller assigns a DB-generated one
+			rule.ID = ""
+
+			// Remove from main chain (now safe — will be re-added to managed chain via SyncDBRules)
+			if err := b.ipt.Delete(iptFilterTable, info.chain, spec...); err != nil {
+				b.logger.Warn("iptables: could not remove imported rule from main chain",
+					"chain", info.chain, "error", err)
+			} else {
+				b.logger.Info("iptables: imported rule removed from main chain",
+					"chain", info.chain, "direction", info.direction)
+			}
+
+			imported = append(imported, *rule)
+		}
+	}
+
+	b.logger.Info("iptables: kernel rule import complete", "imported", len(imported))
+	return imported, nil
+}
+
+// recoverManagedRules re-registers rules in FM_INPUT/FM_OUTPUT that were
+// placed there by a previous run of this server. This populates the
+// in-memory rules map so that DeleteRule/UpdateRule work correctly.
+func (b *IPTablesBackend) recoverManagedRules() {
+	for _, info := range []struct {
+		chain     string
+		direction string
+	}{
+		{iptInputChain, "inbound"},
+		{iptOutputChain, "outbound"},
+	} {
+		lines, err := b.ipt.List(iptFilterTable, info.chain)
+		if err != nil {
+			continue
+		}
+
+		recovered := 0
+		for _, line := range lines {
+			if !strings.HasPrefix(line, "-A") {
+				continue
+			}
+
+			parts := strings.Fields(line)
+			if len(parts) < 4 {
+				continue
+			}
+
+			spec := parts[2:]
+
+			// Extract our rule ID from the comment tag
+			ruleID := extractRuleID(spec)
+			if ruleID == "" {
+				continue
+			}
+
+			// Already tracked
+			if _, ok := b.rules[ruleID]; ok {
+				continue
+			}
+
+			rule := parseIPTablesLine(spec, info.direction)
+			if rule != nil {
+				rule.ID = ruleID
+				b.rules[ruleID] = *rule
+				recovered++
+			}
+		}
+
+		if recovered > 0 {
+			b.logger.Info("iptables: recovered managed rules from previous run",
+				"chain", info.chain, "count", recovered)
+		}
+	}
+}
+
+// parseIPTablesLine parses an iptables rule spec (fields after "-A CHAIN")
+// into a firewall Rule struct.
+func parseIPTablesLine(parts []string, direction string) *Rule {
+	rule := &Rule{
+		Direction:  direction,
+		Protocol:   "all",
+		SourceCIDR: "0.0.0.0/0",
+	}
+
+	for i := 0; i < len(parts); i++ {
+		switch parts[i] {
+		case "-p":
+			if i+1 < len(parts) {
+				i++
+				rule.Protocol = parts[i]
+			}
+		case "--dport":
+			if i+1 < len(parts) {
+				i++
+				if strings.Contains(parts[i], ":") {
+					rangeParts := strings.SplitN(parts[i], ":", 2)
+					rule.Port, _ = strconv.Atoi(rangeParts[0])
+					rule.PortEnd, _ = strconv.Atoi(rangeParts[1])
+				} else {
+					rule.Port, _ = strconv.Atoi(parts[i])
+				}
+			}
+		case "-s":
+			if i+1 < len(parts) {
+				i++
+				rule.SourceCIDR = parts[i]
+			}
+		case "-d":
+			if i+1 < len(parts) {
+				i++
+				rule.DestCIDR = parts[i]
+			}
+		case "-j":
+			if i+1 < len(parts) {
+				i++
+				rule.Action = parts[i]
+			}
+		case "-m":
+			if i+1 < len(parts) {
+				i++ // skip module name (e.g., "tcp", "comment")
+			}
+		case "--comment":
+			if i+1 < len(parts) {
+				i++ // skip comment value
+			}
+		}
+	}
+
+	return rule
+}
+
+// extractRuleID looks for our comment tag in an iptables spec and returns
+// the rule ID, or "" if not found.
+func extractRuleID(spec []string) string {
+	for i, s := range spec {
+		if s == "--comment" && i+1 < len(spec) {
+			comment := strings.Trim(spec[i+1], "\"")
+			if strings.HasPrefix(comment, iptCommentTag) {
+				return strings.TrimPrefix(comment, iptCommentTag)
+			}
+		}
+	}
+	return ""
+}
+
+// shouldSkipImport returns true for rules that should not be imported
+// (jump rules to our managed chains, NFLOG, conntrack, loopback).
+func shouldSkipImport(spec []string) bool {
+	for i, s := range spec {
+		switch s {
+		case "-j":
+			if i+1 < len(spec) {
+				target := spec[i+1]
+				if target == iptInputChain || target == iptOutputChain || target == "NFLOG" {
+					return true
+				}
+			}
+		case "-i", "-o":
+			return true // interface-specific rules (e.g., loopback)
+		case "--state", "--ctstate":
+			return true // conntrack rules
+		case "--comment":
+			if i+1 < len(spec) {
+				comment := strings.Trim(spec[i+1], "\"")
+				if strings.HasPrefix(comment, iptCommentTag) {
+					return true // already managed by us
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isImportableAction returns true for standard firewall actions.
+func isImportableAction(action string) bool {
+	switch action {
+	case "ACCEPT", "DROP", "REJECT":
+		return true
+	}
+	return false
 }
