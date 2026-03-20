@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /firewall-manager ./cmd/server
 # Runtime stage
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates iptables ip6tables nftables
+RUN apk add --no-cache ca-certificates iptables ip6tables nftables procps iproute2
 
 WORKDIR /app
 

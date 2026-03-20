@@ -160,7 +160,7 @@ export default function FirewallRulesPage() {
     const ac = new AbortController()
     fetchRules(ac.signal)
     fetchPorts(ac.signal)
-    listSecurityGroups(ac.signal).then(setSecurityGroups).catch(() => {})
+    listSecurityGroups(ac.signal).then((groups) => setSecurityGroups(groups ?? [])).catch(() => {})
     return () => ac.abort()
   }, [fetchRules, fetchPorts])
 

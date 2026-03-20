@@ -341,7 +341,7 @@ export async function deleteImmutablePort(portId: string, signal?: AbortSignal) 
 
 export async function listSecurityGroups(signal?: AbortSignal) {
     const { data } = await api.get<{ security_groups: SecurityGroupDTO[] }>("/profiles", { signal })
-    return data.security_groups
+    return data.security_groups ?? []
 }
 
 export async function createSecurityGroup(payload: CreateSecurityGroupPayload, signal?: AbortSignal) {
