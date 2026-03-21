@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   Select,
@@ -20,8 +19,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { User, Bell, Server, Shield, Save, RefreshCw, AlertTriangle, Trash2, Plus } from "lucide-react"
+import { User, Bell, Shield, Save } from "lucide-react"
 import type { ProfilePayload, PasswordPayload } from "@/types"
 import { logActivity } from "@/types"
 
@@ -55,7 +53,6 @@ export default function SettingsPage() {
           <TabsTrigger value="profile"><User className="mr-2 h-4 w-4" />Profile</TabsTrigger>
           <TabsTrigger value="security"><Shield className="mr-2 h-4 w-4" />Security</TabsTrigger>
           <TabsTrigger value="notifications"><Bell className="mr-2 h-4 w-4" />Notifications</TabsTrigger>
-          <TabsTrigger value="servers"><Server className="mr-2 h-4 w-4" />Servers</TabsTrigger>
         </TabsList>
 
         {/* Profile Tab */}
@@ -164,25 +161,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-destructive/50">
-            <CardHeader>
-              <CardTitle className="text-destructive">Danger Zone</CardTitle>
-              <CardDescription>Irreversible actions for your account</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Delete Account</p>
-                  <p className="text-xs text-muted-foreground">Permanently delete your account and all associated data</p>
-                </div>
-                <Button variant="destructive" size="sm" onClick={() =>
-                  logActivity({ timestamp: new Date().toISOString(), page: "Settings", action: "DELETE_ACCOUNT_CLICK" })
-                }>
-                  <Trash2 className="mr-2 h-4 w-4" />Delete Account
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* Notifications Tab */}
@@ -221,67 +199,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Servers Tab */}
-        <TabsContent value="servers" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Managed Servers</CardTitle>
-                  <CardDescription>Servers connected to this firewall manager</CardDescription>
-                </div>
-                <Button size="sm" className="bg-[#ff9900] hover:bg-[#ec7211] text-white">
-                  <Plus className="mr-2 h-4 w-4" />Add Server
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                { name: "vps-1", ip: "192.168.1.10", os: "Ubuntu 22.04", status: "online", firewallEngine: "nftables", groups: 2, rules: 12 },
-                { name: "vps-2", ip: "192.168.1.20", os: "Debian 12", status: "online", firewallEngine: "iptables", groups: 1, rules: 8 },
-                { name: "vps-3", ip: "10.0.0.5", os: "CentOS 9", status: "offline", firewallEngine: "nftables", groups: 3, rules: 15 },
-              ].map((server) => (
-                <div key={server.name} className="flex items-center justify-between border p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center bg-muted">
-                      <Server className="h-5 w-5" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{server.name}</span>
-                        <Badge variant="outline" className={server.status === "online" ? "border-emerald-500 text-emerald-500" : "border-red-500 text-red-500"}>
-                          {server.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <code>{server.ip}</code>
-                        <span>{server.os}</span>
-                        <span>{server.firewallEngine}</span>
-                        <span>{server.groups} groups</span>
-                        <span>{server.rules} rules</span>
-                      </div>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() =>
-                    logActivity({ timestamp: new Date().toISOString(), page: "Settings", action: "SYNC_SERVER", data: { server: server.name } })
-                  }>
-                    <RefreshCw className="mr-2 h-3 w-3" />Sync
-                  </Button>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
 
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Server Requirements</AlertTitle>
-            <AlertDescription>
-              Each server must have the firewall agent installed and running with{" "}
-              <code className="text-xs bg-muted px-1 py-0.5">CAP_NET_ADMIN</code>{" "}
-              capability for iptables/nftables management.
-            </AlertDescription>
-          </Alert>
-        </TabsContent>
       </Tabs>
     </div>
   )
